@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="20dp"
+    android:gravity="center_horizontal">
+
+    <!-- 用户ID输入框 -->
+    <EditText
+        android:id="@+id/et_user_id"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="请输入用户ID"
+        android:text="user_1"
+        android:inputType="text"
+        android:maxLines="1"
+        android:layout_marginBottom="15dp"
+        android:paddingHorizontal="10dp"
+        android:paddingVertical="8dp"
+        android:background="@drawable/edittext_bg" />
+
+    <!-- 房间号输入框 -->
+    <EditText
+        android:id="@+id/et_room_id"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="请输入房间号"
+        android:text="123456"
+        android:inputType="text"
+        android:maxLines="1"
+        android:layout_marginBottom="25dp"
+        android:paddingHorizontal="10dp"
+        android:paddingVertical="8dp"
+        android:background="@drawable/edittext_bg" />
+
+    <!-- 跳转按钮 -->
+    <Button
+        android:id="@+id/btn_jump"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="进入房间"
+        android:textSize="16sp"
+        android:backgroundTint="#2196F3"
+        android:textColor="@android:color/white"
+        android:paddingVertical="10dp" />
+
+</LinearLayout>

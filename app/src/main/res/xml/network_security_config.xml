@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true"/>
+    <domain-config cleartextTrafficPermitted="true">
+        <!-- 配置sfu服务器公网 IP -->
+        <domain includeSubdomains="true">52.80.120.124</domain>
+        <trust-anchors>
+            <!-- 信任自签名证书 -->
+            <certificates src="@raw/rootca" />
+        </trust-anchors>
+    </domain-config>
+
+
+</network-security-config>
