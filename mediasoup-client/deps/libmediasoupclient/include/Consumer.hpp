@@ -4,6 +4,7 @@
 #include <json.hpp>
 #include <api/media_stream_interface.h> // webrtc::MediaStreamTrackInterface
 #include <api/rtp_receiver_interface.h> // webrtc::RtpReceiverInterface
+#include <api/crypto/frame_decryptor_interface.h> // webrtc::FrameDecryptorInterface
 #include <string>
 
 namespace mediasoupclient
@@ -56,6 +57,7 @@ namespace mediasoupclient
 		nlohmann::json GetStats() const;
 		void Pause();
 		void Resume();
+		void SetFrameDecryptor(webrtc::FrameDecryptorInterface* decryptor);
 
 	private:
 		void TransportClosed();

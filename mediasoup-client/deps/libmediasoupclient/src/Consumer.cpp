@@ -153,6 +153,31 @@ namespace mediasoupclient
 	}
 
 	/**
+	 * Sets the frame decryptor for the RTP receiver.
+	 */
+	void Consumer::SetFrameDecryptor(webrtc::FrameDecryptorInterface* decryptor)
+	{
+		MSC_TRACE();
+
+		if (this->closed)
+			MSC_THROW_INVALID_STATE_ERROR("Consumer closed");
+
+		// 获取底层的 RtpReceiver 并设置解密器
+		if (this->rtpReceiver != nullptr)
+		{
+			// 将原始指针转换为 scoped_refptr
+			rtc::scoped_refptr<webrtc::FrameDecryptorInterface> decryptor_refptr(
+				decryptor);
+			this->rtpReceiver->SetFrameDecryptor(decryptor_refptr);
+			MSC_DEBUG("Frame decryptor set on RTP receiver: %p", decryptor);
+		}
+		else
+		{
+			MSC_WARN("RTP receiver is null, cannot set frame decryptor");
+		}
+	}
+
+	/**
 	 * Transport was closed.
 	 */
 	void Consumer::TransportClosed()

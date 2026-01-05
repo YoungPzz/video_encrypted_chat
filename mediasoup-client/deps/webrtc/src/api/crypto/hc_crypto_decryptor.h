@@ -1,36 +1,58 @@
 #ifndef API_CRYPTO_HC_CRYPTO_DECRYPTOR_H_
 #define API_CRYPTO_HC_CRYPTO_DECRYPTOR_H_
 
-// 引用WebRTC解密接口
+#include <stddef.h>
+#include <stdint.h>
+
+#include <vector>
+
+#include "api/array_view.h"
 #include "api/crypto/frame_decryptor_interface.h"
-// WebRTC基础依赖
 #include "api/media_types.h"
-#include "rtc_base/array_view.h"
-#include "rtc_base/logging.h"
-#include "rtc_base/ref_count.h"
+#include "rtc_base/ref_counted_object.h"
+#include "rtc_base/logging.h" // 日志工具
 
 namespace webrtc {
 
-// 自定义XOR解密器：对应XOR加密器
-    class HCCryptoDecryptor : public FrameDecryptorInterface {
+// 自定义解密器，继承 WebRTC 原生的 FrameDecryptorInterface
+    class HCCryptoDecryptor
+            : public rtc::RefCountedObject<FrameDecryptorInterface> {
     public:
-        // 构造函数：传入XOR密钥（与加密侧一致）
-        explicit HCCryptoDecryptor(uint8_t xor_key);
-        ~HCCryptoDecryptor() override = default;
-
-        // 核心解密方法（重写父类虚函数）
+        // Provide a key (0,255) and some postfix byte (0,255) this should match the
+        // byte you expect from the FakeFrameEncryptor.
+        explicit HCCryptoDecryptor(uint8_t fake_key = 0xAA,
+                                    uint8_t expected_postfix_byte = 255);
+        // Fake decryption that just xors the payload with the 1 byte key and checks
+        // the postfix byte. This will always fail if fail_decryption_ is set to true.
         Result Decrypt(cricket::MediaType media_type,
-                       const std::vector<uint32_t>& ssrcs,
+                       const std::vector<uint32_t>& csrcs,
                        rtc::ArrayView<const uint8_t> additional_data,
                        rtc::ArrayView<const uint8_t> encrypted_frame,
                        rtc::ArrayView<uint8_t> frame) override;
-
-        // 计算解密后明文的最大长度（与加密侧GetMaxCiphertextByteSize对应）
+        // Always returns 1 less than the size of the encrypted frame.
         size_t GetMaxPlaintextByteSize(cricket::MediaType media_type,
                                        size_t encrypted_frame_size) override;
+        // Sets the fake key to use for encryption.
+        void SetFakeKey(uint8_t fake_key);
+        // Returns the fake key used for encryption.
+        uint8_t GetFakeKey() const;
+        // Set the Postfix byte that is expected in the encrypted payload.
+        void SetExpectedPostfixByte(uint8_t expected_postfix_byte);
+        // Returns the postfix byte that will be checked for in the encrypted payload.
+        uint8_t GetExpectedPostfixByte() const;
+        // If set to true will force all encryption to fail.
+        void SetFailDecryption(bool fail_decryption);
+        // Simple error codes for tests to validate against.
+        enum class FakeDecryptStatus : int {
+            OK = 0,
+            FORCED_FAILURE = 1,
+            INVALID_POSTFIX = 2
+        };
 
     private:
-        uint8_t xor_key_;  // XOR密钥（与加密侧完全一致）
+        uint8_t fake_key_ = 0;
+        uint8_t expected_postfix_byte_ = 0;
+        bool fail_decryption_ = false;
     };
 
 }  // namespace webrtc

@@ -104,6 +104,16 @@ public class Consumer {
   }
 
   /**
+   * Sets the frame decryptor for this consumer.
+   *
+   * @param decryptor The frame decryptor instance.
+   * @throws MediasoupException
+   */
+  public void setFrameDecryptor(org.webrtc.HCCryptoDecryptor decryptor) throws MediasoupException {
+    nativeSetFrameDecryptor(mNativeConsumer, decryptor.getNativeHCCryptoDecryptor());
+  }
+
+  /**
    * Pauses the consumer. Internally the library executes track->set_enabled(false) in the remote
    * track.
    */
@@ -146,6 +156,8 @@ public class Consumer {
   private static native String nativeGetRtpParameters(long consumer);
 
   private static native String nativeGetAppData(long consumer);
+
+  private static native void nativeSetFrameDecryptor(long consumer, long decryptor) throws MediasoupException;
 
   private static native void nativeResume(long consumer);
 

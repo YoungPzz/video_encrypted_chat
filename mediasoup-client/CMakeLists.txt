@@ -27,6 +27,7 @@ set(
 	${SOURCE_DIR}/data_producer_jni.cpp
 	${SOURCE_DIR}/device_jni.cpp
 	${SOURCE_DIR}/hc_crypto_jni.cpp
+	${SOURCE_DIR}/hc_crypto_decryptor_jni.cpp
 	${SOURCE_DIR}/logger_jni.cpp
 	${SOURCE_DIR}/mediasoup_client_jni.cpp
 	${SOURCE_DIR}/peerconnection_jni.cpp

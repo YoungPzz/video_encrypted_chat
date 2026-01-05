@@ -16,6 +16,7 @@ import org.mediasoup.droid.SendTransport;
 import org.mediasoup.droid.Transport;
 import org.webrtc.AudioTrack;
 import org.webrtc.HCCrypto;
+import org.webrtc.HCCryptoDecryptor;
 import org.webrtc.MediaStreamTrack;
 import org.webrtc.VideoTrack;
 import org.mediasoup.droid.MediasoupException;
@@ -253,7 +254,7 @@ public class RoomClient {
                         JSONObject params = new JSONObject();
                         params.put("kind", kind);
                         params.put("rtpParameters", rtpParameters);
-
+                        Log.d("youngptest", rtpParameters);
                         // 添加应用数据和用户信息
                         JSONObject appDataObject = new JSONObject(appData);
 
@@ -559,6 +560,26 @@ public class RoomClient {
                                     rtpParameters.toString(),
                                     appData.toString()
                             );
+
+                            if (consumer != null) {
+                                Log.d(TAG, "=== 开始设置 " + kind + " 解密器 ===");
+                                Log.d(TAG, "Consumer ID: " + consumer.getId());
+                                Log.d(TAG, "Producer ID: " + producerId);
+                                try {
+                                    HCCryptoDecryptor decryptor = new HCCryptoDecryptor();
+                                    Log.d(TAG, "HCCryptoDecryptor Java 对象创建成功");
+                                    Log.d(TAG, "Native decryptor 指针: " + decryptor.getNativeHCCryptoDecryptor());
+
+                                    consumer.setFrameDecryptor(decryptor);
+                                    Log.d(TAG, kind + "解密器已设置成功");
+                                    Log.d(TAG, "=== 解密器设置完成 ===");
+                                } catch (Exception e) {
+                                    Log.e(TAG, "设置解密器失败: " + e.getMessage(), e);
+                                    e.printStackTrace();
+                                }
+                            } else {
+                                Log.e(TAG, "Consumer 为 null，无法设置解密器");
+                            }
 
                             // 在Android中处理RTP接收器
                             // 注意：Android的WebRTC API可能与Web不同，需要检查是否支持编码流处理

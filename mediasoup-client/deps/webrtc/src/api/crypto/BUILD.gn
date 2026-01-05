@@ -13,6 +13,7 @@ group("crypto") {
     ":frame_decryptor_interface",
     ":frame_encryptor_interface",
     ":hc_crypto",  # 新增：你的加密器实现文件
+    ":hc_crypto_decryptor",  # 新增：你的解密器实现文件
     ":options"
   ]
 }
@@ -56,6 +57,21 @@ rtc_source_set("hc_crypto") {
   sources = [
     "hc_crypto.h",
     "hc_crypto.cc",
+  ]
+  deps = [
+    "..:array_view",
+    "..:rtp_parameters",
+    "../../rtc_base:refcount",
+    "../../rtc_base:rtc_base_approved",  # 对应 buffer.h
+    "../../rtc_base:logging",            # 对应 logging.h
+  ]
+}
+
+rtc_source_set("hc_crypto_decryptor") {
+  visibility = [ "*" ]
+  sources = [
+    "hc_crypto_decryptor.h",
+    "hc_crypto_decryptor.cc",
   ]
   deps = [
     "..:array_view",

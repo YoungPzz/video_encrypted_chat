@@ -137,6 +137,16 @@ JNI_GENERATOR_EXPORT jstring Java_org_mediasoup_droid_Consumer_nativeGetAppData(
   return JNI_Consumer_GetAppData(env, consumer).Release();
 }
 
+static void JNI_Consumer_SetFrameDecryptor(JNIEnv* env, jlong consumer, jlong decryptor);
+
+JNI_GENERATOR_EXPORT void Java_org_mediasoup_droid_Consumer_nativeSetFrameDecryptor(
+            JNIEnv* env,
+            jclass jcaller,
+            jlong consumer,
+            jlong decryptor) {
+  return JNI_Consumer_SetFrameDecryptor(env, consumer, decryptor);
+}
+
 static void JNI_Consumer_Resume(JNIEnv* env, jlong consumer);
 
 JNI_GENERATOR_EXPORT void Java_org_mediasoup_droid_Consumer_nativeResume(

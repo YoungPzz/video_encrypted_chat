@@ -135,6 +135,28 @@ static void JNI_Consumer_Close(JNIEnv* env, jlong j_consumer)
 	reinterpret_cast<OwnedConsumer*>(j_consumer)->consumer()->Close();
 }
 
+static void JNI_Consumer_SetFrameDecryptor(JNIEnv* env, jlong consumer, jlong decryptor)
+{
+	MSC_TRACE();
+	try
+	{
+		// 1. 类型转换：将 JNI 层的 long 指针转换为 Native 层的 Consumer 指针
+		auto* owned_consumer = reinterpret_cast<OwnedConsumer*>(consumer);
+
+		// 2. 类型转换：将 JNI 层的 decryptor 指针转换为 FrameDecryptorInterface 指针
+		auto* frame_decryptor = reinterpret_cast<webrtc::FrameDecryptorInterface*>(decryptor);
+
+		// 3. 调用 Consumer 的 SetFrameDecryptor 方法
+		owned_consumer->consumer()->SetFrameDecryptor(frame_decryptor);
+	}
+	catch (const std::exception& e)
+	{
+		// 4. 异常捕获与错误处理
+		MSC_ERROR("failed to set frame decryptor: %s", e.what());
+		THROW_MEDIASOUP_CLIENT_EXCEPTION(env, e);
+	}
+}
+
 ScopedJavaLocalRef<jobject> NativeToJavaConsumer(
   JNIEnv* env, Consumer* consumer, ConsumerListenerJni* listener)
 {
