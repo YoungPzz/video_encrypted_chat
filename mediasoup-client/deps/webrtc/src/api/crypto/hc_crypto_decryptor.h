@@ -11,6 +11,7 @@
 #include "api/media_types.h"
 #include "rtc_base/ref_counted_object.h"
 #include "rtc_base/logging.h" // 日志工具
+#include "api/crypto/GmSSL-master/include/gmssl/sm4.h"
 
 namespace webrtc {
 
@@ -49,10 +50,26 @@ namespace webrtc {
             INVALID_POSTFIX = 2
         };
 
+    public:
+        // SM4 相关方法
+        void SetSM4Key(const uint8_t key[16]);
+        void SetSM4CTR(const uint8_t ctr[16]);
+        void EnableSM4Decryption(bool enable);
+
     private:
         uint8_t fake_key_ = 0;
         uint8_t expected_postfix_byte_ = 0;
         bool fail_decryption_ = false;
+
+        // 新增：SM4-CTR 解密相关成员
+        SM4_KEY sm4_key_;              // SM4 密钥上下文
+        uint8_t sm4_key_bytes_[16];    // 16字节 SM4 密钥
+        uint8_t sm4_ctr_[16];          // 16字节 CTR 计数器
+        bool use_sm4_decryption_;      // 是否使用 SM4 解密
+
+        // 预定义的固定 SM4 密钥和 CTR（用于初始化）
+        static const uint8_t DEFAULT_SM4_KEY[16];
+        static const uint8_t DEFAULT_SM4_CTR[16];
     };
 
 }  // namespace webrtc

@@ -64,6 +64,7 @@ rtc_source_set("hc_crypto") {
     "../../rtc_base:refcount",
     "../../rtc_base:rtc_base_approved",  # 对应 buffer.h
     "../../rtc_base:logging",            # 对应 logging.h
+    ":gmssl_sm4",                         # 新增：依赖 GmSSL SM4
   ]
 }
 
@@ -79,5 +80,45 @@ rtc_source_set("hc_crypto_decryptor") {
     "../../rtc_base:refcount",
     "../../rtc_base:rtc_base_approved",  # 对应 buffer.h
     "../../rtc_base:logging",            # 对应 logging.h
+    ":gmssl_sm4",                         # 新增：依赖 GmSSL SM4
+  ]
+}
+
+# 新增：GmSSL SM4 库定义
+# 依赖链分析：
+# sm4_ctr.c -> sm4.h, mem.h, error.h
+# sm4.c -> sm4.h, endian.h
+# sm4.h -> ghash.h
+# ghash.c -> mem.h, ghash.h, error.h, endian.h, gf128.h
+# gf128.c -> gf128.h, endian.h
+rtc_source_set("gmssl_sm4") {
+  visibility = [ "*" ]
+  sources = [
+    # 头文件
+    "GmSSL-master/include/gmssl/sm4.h",
+    "GmSSL-master/include/gmssl/ghash.h",
+    "GmSSL-master/include/gmssl/gf128.h",
+    "GmSSL-master/include/gmssl/mem.h",
+    "GmSSL-master/include/gmssl/error.h",
+    "GmSSL-master/include/gmssl/endian.h",
+    # 源文件
+    "GmSSL-master/src/sm4.c",
+    "GmSSL-master/src/sm4_ctr.c",
+    "GmSSL-master/src/ghash.c",
+    "GmSSL-master/src/gf128.c",
+    "GmSSL-master/src/hex.c",  # 新增：提供 gmssl_secure_clear 函数
+  ]
+  include_dirs = [
+    "GmSSL-master/include",
+  ]
+  defines = [
+    "ENABLE_SMALL_FOOTPRINT=0",  # 定义宏，使用优化版本的 SM4 实现
+  ]
+  cflags = [
+    "-Wno-unused-function",  # 抑制未使用函数的警告
+    "-Wno-unused-variable",  # 抑制未使用变量的警告
+  ]
+  cflags_c = [
+    "-Wno-unused-function",  # 对 C 文件也抑制未使用函数的警告
   ]
 }
