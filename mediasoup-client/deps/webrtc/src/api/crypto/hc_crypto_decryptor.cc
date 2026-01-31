@@ -49,6 +49,8 @@ namespace webrtc {
         if (fail_decryption_) {
             return Result(Status::kFailedToDecrypt, 0);
         }
+        // --- 性能测试相关：1. 记录解密开始时间 ---
+        int64_t start_time = rtc::TimeMicros();
 
         RTC_CHECK_EQ(frame.size() + 1, encrypted_frame.size());
 
@@ -77,6 +79,37 @@ namespace webrtc {
                            << expected_postfix_byte_ << ", got " 
                            << encrypted_frame[frame.size()];
             return Result(Status::kFailedToDecrypt, 0);
+        }
+
+
+        // --- 性能测试相关：2. 针对视频进行统计处理 ---
+        if (media_type == cricket::MEDIA_TYPE_VIDEO) {
+            int64_t elapsed_us = rtc::TimeMicros() - start_time;
+
+            v_total_us_dec_ += elapsed_us;     // 注意：建议在头文件中定义独立的解密统计变量
+            v_total_bytes_dec_ += frame.size();
+            v_frame_count_dec_++;
+
+            if (elapsed_us > v_max_us_dec_) v_max_us_dec_ = elapsed_us;
+
+            // 每 300 帧输出一次报告
+            if (v_frame_count_dec_ >= 300) {
+                double avg_us = static_cast<double>(v_total_us_dec_) / v_frame_count_dec_;
+                double duration_sec = v_total_us_dec_ / 1000000.0;
+                double mbps = (duration_sec > 0) ? (v_total_bytes_dec_ * 8.0 / 1024 / 1024) / duration_sec : 0;
+
+                RTC_LOG(LS_WARNING) << ">>> [VideoDec Performance] "
+                                    << "Frames: " << v_frame_count_dec_
+                                    << " | Avg: " << avg_us << " us"
+                                    << " | Max: " << v_max_us_dec_ << " us"
+                                    << " | Throughput: " << mbps << " Mbps";
+
+                // 重置统计量
+                v_total_us_dec_ = 0;
+                v_total_bytes_dec_ = 0;
+                v_frame_count_dec_ = 0;
+                v_max_us_dec_ = 0;
+            }
         }
 
         RTC_LOG(LS_INFO) << "[HCCrypto] decrypt success, status=OK";

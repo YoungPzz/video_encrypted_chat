@@ -19,6 +19,7 @@
 #include "api/media_types.h"
 #include "rtc_base/ref_counted_object.h"
 #include "rtc_base/logging.h" // 日志工具
+#include "rtc_base/time_utils.h" // 提供 rtc::TimeMicros() 等高精度计时函数
 #include "api/crypto/GmSSL-master/include/gmssl/sm4.h"
 
 namespace webrtc {
@@ -80,6 +81,12 @@ namespace webrtc {
         // 预定义的固定 SM4 密钥和 CTR（用于初始化）
         static const uint8_t DEFAULT_SM4_KEY[16];
         static const uint8_t DEFAULT_SM4_CTR[16];
+
+        // 统计相关变量
+        int64_t v_total_us_ = 0;     // 视频总耗时（微秒）
+        size_t v_frame_count_ = 0;   // 视频帧数计数
+        int64_t v_max_us_ = 0;       // 视频单帧最大耗时
+        size_t v_total_bytes_ = 0;   // 视频总处理字节数
     };
 
 }  // namespace webrtc

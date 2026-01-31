@@ -477,7 +477,7 @@ public class VideoChatActivity extends Activity {
             surfaceTextureHelper = SurfaceTextureHelper.create("CaptureThread", eglBase.getEglBaseContext());
             VideoSource videoSource = peerConnectionFactory.createVideoSource(false);
             videoCapturer.initialize(surfaceTextureHelper, this, videoSource.getCapturerObserver());
-            videoCapturer.startCapture(250, 144, 30);
+            videoCapturer.startCapture(1280, 720, 30);  // 修改为1280x720分辨率，30fps
 
             localVideoTrack = peerConnectionFactory.createVideoTrack("video_track", videoSource);
             localVideoTrack.addSink(localVideoView);

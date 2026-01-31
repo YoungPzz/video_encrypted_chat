@@ -45,4 +45,16 @@
         android:textColor="@android:color/white"
         android:paddingVertical="10dp" />
 
+    <!-- 性能检测按钮 -->
+    <Button
+        android:id="@+id/btn_performance"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="设备性能检测"
+        android:textSize="16sp"
+        android:backgroundTint="#4CAF50"
+        android:textColor="@android:color/white"
+        android:paddingVertical="10dp"
+        android:layout_marginTop="12dp" />
+
 </LinearLayout>

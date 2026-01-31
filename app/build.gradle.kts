@@ -57,6 +57,8 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.7.1")
     implementation("com.google.android.material:material:1.13.0")
     implementation("androidx.constraintlayout:constraintlayout:2.2.1")
+    implementation("androidx.window:window:1.5.1")  // Jetpack Window 库，用于 getMediaPerformanceClass()
+    implementation("androidx.core:core-performance:1.0.0")  // Jetpack Performance Class 库，包含 DefaultDevicePerformance 类
 //    implementation(files("libs\\libwebrtc.jar"))
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")

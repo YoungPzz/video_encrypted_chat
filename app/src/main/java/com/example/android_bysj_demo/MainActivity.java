@@ -14,6 +14,7 @@ public class MainActivity extends AppCompatActivity {
     private EditText etUserId;
     private EditText etRoomId;
     private Button btnJump;
+    private Button btnPerformance;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -38,10 +39,17 @@ public class MainActivity extends AppCompatActivity {
 
             // 携带数据跳转到密钥协商Activity
 //            Intent intent = new Intent(MainActivity.this, KeyNegotiationActivity.class);
-            Intent intent = new Intent(MainActivity.this, RoomCreationActivity.class);
-
+//            Intent intent = new Intent(MainActivity.this, RoomCreationActivity.class);
+            Intent intent = new Intent(MainActivity.this, VideoChatActivity.class);
             intent.putExtra("USER_ID", userId);
             intent.putExtra("ROOM_ID", roomId);
+            startActivity(intent);
+        });
+
+        // 性能检测按钮点击事件
+        if(btnPerformance == null) return;
+        btnPerformance.setOnClickListener(v -> {
+            Intent intent = new Intent(MainActivity.this, PerformanceClassActivity.class);
             startActivity(intent);
         });
     }
@@ -51,5 +59,6 @@ public class MainActivity extends AppCompatActivity {
         etUserId = findViewById(R.id.et_user_id);
         etRoomId = findViewById(R.id.et_room_id);
         btnJump = findViewById(R.id.btn_jump);
+        btnPerformance = findViewById(R.id.btn_performance);
     }
 }

@@ -44,6 +44,10 @@
             android:name=".RoomCreationActivity"
             android:exported="false">
         </activity>
+        <activity
+            android:name=".PerformanceClassActivity"
+            android:exported="false">
+        </activity>
 
     </application>
 
