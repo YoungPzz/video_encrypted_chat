@@ -4,11 +4,12 @@
     <domain-config cleartextTrafficPermitted="true">
         <!-- 配置sfu服务器公网 IP -->
         <domain includeSubdomains="true">52.80.120.124</domain>
+        <!-- 本地开发服务器地址（用于测试） -->
+        <domain includeSubdomains="true">192.168.19.1</domain>
+        <domain includeSubdomains="true">10.0.2.2</domain>
         <trust-anchors>
             <!-- 信任自签名证书 -->
             <certificates src="@raw/rootca" />
         </trust-anchors>
     </domain-config>
-
-
 </network-security-config>

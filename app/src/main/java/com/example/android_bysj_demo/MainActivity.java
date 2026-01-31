@@ -36,8 +36,10 @@ public class MainActivity extends AppCompatActivity {
                 return;
             }
 
-            // 携带数据跳转到SecondActivity
-            Intent intent = new Intent(MainActivity.this, VideoChatActivity.class);
+            // 携带数据跳转到密钥协商Activity
+//            Intent intent = new Intent(MainActivity.this, KeyNegotiationActivity.class);
+            Intent intent = new Intent(MainActivity.this, RoomCreationActivity.class);
+
             intent.putExtra("USER_ID", userId);
             intent.putExtra("ROOM_ID", roomId);
             startActivity(intent);

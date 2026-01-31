@@ -48,6 +48,17 @@ public class RoomClient {
     private List<ConsumerInfo> consumerTransports = new ArrayList<>();
     private boolean toUserIsReady = false;
     private static String ServerURL = "http://52.80.120.124:3000/mediasoup";
+    
+    // 加密配置参数
+    private boolean useSM4Encryption = true; // 默认启用 SM4 加密
+    private byte[] sm4Key = new byte[]{
+        0x01, 0x23, 0x45, 0x67, (byte)0x89, (byte)0xAB, (byte)0xCD, (byte)0xEF,
+        (byte)0xFE, (byte)0xDC, (byte)0xBA, 0x76, 0x54, 0x32, 0x10
+    };
+    private byte[] sm4CTR = new byte[]{
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01
+    };
 
     public interface MediasoupClientListener {
         void onConnected();
@@ -567,6 +578,16 @@ public class RoomClient {
                                 Log.d(TAG, "Producer ID: " + producerId);
                                 try {
                                     HCCryptoDecryptor decryptor = new HCCryptoDecryptor();
+                                    // 配置解密器
+                                    decryptor.enableSM4Decryption(useSM4Encryption);
+                                    if (useSM4Encryption) {
+//                                        decryptor.setSM4Key(sm4Key);
+//                                        decryptor.setSM4CTR(sm4CTR);
+                                        Log.d(TAG, kind + "解密器已设置（SM4-CTR）");
+                                    } else {
+                                        Log.d(TAG, kind + "解密器已设置（XOR）");
+                                    }
+                                    
                                     Log.d(TAG, "HCCryptoDecryptor Java 对象创建成功");
                                     Log.d(TAG, "Native decryptor 指针: " + decryptor.getNativeHCCryptoDecryptor());
 
@@ -671,8 +692,16 @@ public class RoomClient {
                 // 添加加密器设置
                 if (videoProducer != null) {
                     HCCrypto encryptor = new HCCrypto();
+                    // 配置加密器
+                    encryptor.enableSM4Encryption(useSM4Encryption);
+                    if (useSM4Encryption) {
+//                        encryptor.setSM4Key(sm4Key);
+//                        encryptor.setSM4CTR(sm4CTR);
+                        Log.d(TAG, "视频加密器已设置（SM4-CTR）");
+                    } else {
+                        Log.d(TAG, "视频加密器已设置（XOR）");
+                    }
                     videoProducer.setFrameEncryptor(encryptor);
-                    Log.d(TAG, "视频加密器已设置");
                 }
                 Log.d(TAG, "produce video track success: ");
             } catch (MediasoupException e) {
@@ -693,8 +722,16 @@ public class RoomClient {
                 );
                 if (audioProducer != null) {
                     HCCrypto encryptor = new HCCrypto();
+                    // 配置加密器
+                    encryptor.enableSM4Encryption(useSM4Encryption);
+                    if (useSM4Encryption) {
+                        encryptor.setSM4Key(sm4Key);
+                        encryptor.setSM4CTR(sm4CTR);
+                        Log.d(TAG, "音频加密器已设置（SM4-CTR）");
+                    } else {
+                        Log.d(TAG, "音频加密器已设置（XOR）");
+                    }
                     audioProducer.setFrameEncryptor(encryptor);
-                    Log.d(TAG, "音频加密器已设置");
                 }
             } catch (MediasoupException e) {
                 Log.e(TAG, "Error adding audio track: " + e.getMessage());
@@ -718,5 +755,49 @@ public class RoomClient {
         if (mediasoupDevice != null) {
             mediasoupDevice.dispose();
         }
+    }
+
+    // ========== 加密配置方法 ==========
+
+    /**
+     * 设置是否使用 SM4 加密（默认为 true）
+     * @param enable true 使用 SM4-CTR 加密，false 使用 XOR 加密
+     */
+    public void setSM4Encryption(boolean enable) {
+        this.useSM4Encryption = enable;
+        Log.d(TAG, "SM4 加密设置为: " + (enable ? "启用" : "禁用"));
+    }
+
+    /**
+     * 设置 SM4 密钥（16字节）
+     * @param key 16字节的密钥数组
+     */
+    public void setSM4Key(byte[] key) {
+        if (key == null || key.length != 16) {
+            Log.e(TAG, "SM4 密钥必须是 16 字节");
+            return;
+        }
+        this.sm4Key = key;
+        Log.d(TAG, "SM4 密钥已更新");
+    }
+
+    /**
+     * 设置 SM4 CTR 计数器（16字节）
+     * @param ctr 16字节的 CTR 数组
+     */
+    public void setSM4CTR(byte[] ctr) {
+        if (ctr == null || ctr.length != 16) {
+            Log.e(TAG, "SM4 CTR 必须是 16 字节");
+            return;
+        }
+        this.sm4CTR = ctr;
+        Log.d(TAG, "SM4 CTR 已更新");
+    }
+
+    /**
+     * 获取当前是否启用 SM4 加密
+     */
+    public boolean isSM4EncryptionEnabled() {
+        return useSM4Encryption;
     }
 }

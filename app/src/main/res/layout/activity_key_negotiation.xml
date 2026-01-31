@@ -1,0 +1,225 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#F5F5F5">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <!-- 标题 -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="密钥协商"
+            android:textSize="24sp"
+            android:textStyle="bold"
+            android:textColor="#333333"
+            android:gravity="center"
+            android:layout_marginBottom="20dp" />
+
+        <!-- 用户信息卡片 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@android:color/white"
+            android:padding="16dp"
+            android:layout_marginBottom="16dp"
+            android:elevation="2dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="用户信息"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:textColor="#2196F3"
+                android:layout_marginBottom="12dp" />
+
+            <EditText
+                android:id="@+id/et_user_id"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="请输入用户ID"
+                android:inputType="text"
+                android:maxLines="1"
+                android:layout_marginBottom="10dp"
+                android:padding="12dp"
+                android:background="@drawable/edittext_bg" />
+
+            <EditText
+                android:id="@+id/et_room_id"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="请输入房间号"
+                android:inputType="text"
+                android:maxLines="1"
+                android:padding="12dp"
+                android:background="@drawable/edittext_bg" />
+        </LinearLayout>
+
+        <!-- 操作按钮区域 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="16dp">
+
+            <Button
+                android:id="@+id/btn_get_local_share"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="获取本地分片"
+                android:backgroundTint="#4CAF50"
+                android:textColor="@android:color/white"
+                android:layout_marginEnd="8dp"
+                android:paddingVertical="12dp" />
+
+            <Button
+                android:id="@+id/btn_get_remote_share"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="获取他人分片"
+                android:backgroundTint="#FF9800"
+                android:textColor="@android:color/white"
+                android:layout_marginStart="8dp"
+                android:paddingVertical="12dp" />
+        </LinearLayout>
+
+        <Button
+            android:id="@+id/btn_recover_key"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="恢复密钥"
+            android:backgroundTint="#9C27B0"
+            android:textColor="@android:color/white"
+            android:layout_marginBottom="16dp"
+            android:paddingVertical="12dp" />
+
+        <!-- 本地分片信息 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@android:color/white"
+            android:padding="16dp"
+            android:layout_marginBottom="16dp"
+            android:elevation="2dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="本地分片信息"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:textColor="#4CAF50"
+                android:layout_marginBottom="8dp" />
+
+            <ScrollView
+                android:id="@+id/scroll_view_shares"
+                android:layout_width="match_parent"
+                android:layout_height="150dp">
+
+                <TextView
+                    android:id="@+id/tv_local_share_info"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="点击“获取本地分片”按钮生成分片"
+                    android:textColor="#666666"
+                    android:textSize="12sp"
+                    android:fontFamily="monospace"
+                    android:padding="8dp" />
+            </ScrollView>
+        </LinearLayout>
+
+        <!-- 他人分片信息 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@android:color/white"
+            android:padding="16dp"
+            android:layout_marginBottom="16dp"
+            android:elevation="2dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="他人分片信息"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:textColor="#FF9800"
+                android:layout_marginBottom="8dp" />
+
+            <ScrollView
+                android:layout_width="match_parent"
+                android:layout_height="150dp">
+
+                <TextView
+                    android:id="@+id/tv_remote_share_info"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="点击“获取他人分片”按钮接收分片"
+                    android:textColor="#666666"
+                    android:textSize="12sp"
+                    android:fontFamily="monospace"
+                    android:padding="8dp" />
+            </ScrollView>
+        </LinearLayout>
+
+        <!-- 密钥恢复结果 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@android:color/white"
+            android:padding="16dp"
+            android:layout_marginBottom="16dp"
+            android:elevation="2dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="密钥恢复结果"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:textColor="#9C27B0"
+                android:layout_marginBottom="8dp" />
+
+            <ScrollView
+                android:id="@+id/scroll_view_key"
+                android:layout_width="match_parent"
+                android:layout_height="150dp">
+
+                <TextView
+                    android:id="@+id/tv_recovered_key_info"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="点击“恢复密钥”按钮查看恢复结果"
+                    android:textColor="#666666"
+                    android:textSize="12sp"
+                    android:fontFamily="monospace"
+                    android:padding="8dp" />
+            </ScrollView>
+        </LinearLayout>
+
+        <!-- 进入房间按钮 -->
+        <Button
+            android:id="@+id/btn_enter_room"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="进入视频房间"
+            android:textSize="16sp"
+            android:backgroundTint="#2196F3"
+            android:textColor="@android:color/white"
+            android:paddingVertical="14dp" />
+
+    </LinearLayout>
+
+</ScrollView>

@@ -28,9 +28,26 @@ public class HCCryptoDecryptor {
     private native long nativeCreateHCCryptoDecryptor();
 
     /**
-     * 销毁 Native 层资源
-     */
+       */
     private native void nativeDestroyHCCryptoDecryptor(long ptr);
+
+    /**
+     * 启用或禁用 SM4 解密
+     * @param enable true 启用 SM4 解密，false 使用 XOR 解密
+     */
+    public native void nativeEnableSM4Decryption(long ptr, boolean enable);
+
+    /**
+     * 设置 SM4 密钥（16字节）
+     * @param key 16字节的 SM4 密钥
+     */
+    public native void nativeSetSM4Key(long ptr, byte[] key);
+
+    /**
+     * 设置 SM4 CTR 计数器（16字节）
+     * @param ctr 16字节的 CTR 计数器
+     */
+    public native void nativeSetSM4CTR(long ptr, byte[] ctr);
 
     /**
      * 释放资源
@@ -39,6 +56,36 @@ public class HCCryptoDecryptor {
         if (nativeHCCryptoDecryptorPtr != 0) {
             nativeDestroyHCCryptoDecryptor(nativeHCCryptoDecryptorPtr);
             nativeHCCryptoDecryptorPtr = 0;
+        }
+    }
+
+    /**
+     * 启用或禁用 SM4 解密
+     * @param enable true 启用 SM4 解密，false 使用 XOR 解密
+     */
+    public void enableSM4Decryption(boolean enable) {
+        if (nativeHCCryptoDecryptorPtr != 0) {
+            nativeEnableSM4Decryption(nativeHCCryptoDecryptorPtr, enable);
+        }
+    }
+
+    /**
+     * 设置 SM4 密钥（16字节）
+     * @param key 16字节的 SM4 密钥
+     */
+    public void setSM4Key(byte[] key) {
+        if (nativeHCCryptoDecryptorPtr != 0) {
+            nativeSetSM4Key(nativeHCCryptoDecryptorPtr, key);
+        }
+    }
+
+    /**
+     * 设置 SM4 CTR 计数器（16字节）
+     * @param ctr 16字节的 CTR 计数器
+     */
+    public void setSM4CTR(byte[] ctr) {
+        if (nativeHCCryptoDecryptorPtr != 0) {
+            nativeSetSM4CTR(nativeHCCryptoDecryptorPtr, ctr);
         }
     }
 }

@@ -36,7 +36,14 @@
             android:name=".VideoChatActivity"
             android:exported="false">
         </activity>
-
+        <activity
+            android:name=".KeyNegotiationActivity"
+            android:exported="false">
+        </activity>
+        <activity
+            android:name=".RoomCreationActivity"
+            android:exported="false">
+        </activity>
 
     </application>
 
