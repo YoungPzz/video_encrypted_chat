@@ -50,7 +50,10 @@ public class RoomClient {
     private static String ServerURL = "http://52.80.120.124:3000/mediasoup";
     
     // 加密配置参数
-    private boolean useSM4Encryption = true; // 默认启用 SM4 加密
+    private boolean useSM4Encryption = false; // 默认启用 SM4 加密
+
+    private boolean openEncryption = true; //是否加密
+
     private byte[] sm4Key = new byte[]{
         0x01, 0x23, 0x45, 0x67, (byte)0x89, (byte)0xAB, (byte)0xCD, (byte)0xEF,
         (byte)0xFE, (byte)0xDC, (byte)0xBA, 0x76, 0x54, 0x32, 0x10
@@ -65,6 +68,7 @@ public class RoomClient {
         void onConnectionFailed(String error);
         void onRemoteTrackAdded(VideoTrack videoTrack, AudioTrack audioTrack);
         void onParticipantLeft(String participantId);
+
     }
 
     public RoomClient(Context context, String userId, String roomId) {
@@ -590,8 +594,7 @@ public class RoomClient {
                                     
                                     Log.d(TAG, "HCCryptoDecryptor Java 对象创建成功");
                                     Log.d(TAG, "Native decryptor 指针: " + decryptor.getNativeHCCryptoDecryptor());
-
-                                    consumer.setFrameDecryptor(decryptor);
+                                    if (openEncryption) consumer.setFrameDecryptor(decryptor);
                                     Log.d(TAG, kind + "解密器已设置成功");
                                     Log.d(TAG, "=== 解密器设置完成 ===");
                                 } catch (Exception e) {
@@ -701,7 +704,7 @@ public class RoomClient {
                     } else {
                         Log.d(TAG, "视频加密器已设置（XOR）");
                     }
-                    videoProducer.setFrameEncryptor(encryptor);
+                    if (openEncryption) videoProducer.setFrameEncryptor(encryptor);
                 }
                 Log.d(TAG, "produce video track success: ");
             } catch (MediasoupException e) {
@@ -766,6 +769,15 @@ public class RoomClient {
     public void setSM4Encryption(boolean enable) {
         this.useSM4Encryption = enable;
         Log.d(TAG, "SM4 加密设置为: " + (enable ? "启用" : "禁用"));
+    }
+
+    /**
+     * 设置是否启用加密（默认为 true）
+     * @param enable true 启用加密，false 禁用加密
+     */
+    public void setOpenEncryption(boolean enable) {
+        this.openEncryption = enable;
+        Log.d(TAG, "加密功能设置为: " + (enable ? "启用" : "禁用"));
     }
 
     /**

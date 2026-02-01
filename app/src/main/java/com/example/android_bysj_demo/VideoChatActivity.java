@@ -85,6 +85,8 @@ public class VideoChatActivity extends Activity {
     private long callStartTime;
     private Handler timerHandler;
     private boolean isCallConnected = false;
+    private boolean useSM4Encryption = true; // 加密模式
+    private boolean openEncryption = true; // 是否启用加密
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -94,6 +96,8 @@ public class VideoChatActivity extends Activity {
         // Get intent extras
         roomId = getIntent().getStringExtra("ROOM_ID");
         userId = getIntent().getStringExtra("USER_ID");
+        useSM4Encryption = getIntent().getBooleanExtra("USE_SM4_ENCRYPTION", true); // 获取加密模式
+        openEncryption = getIntent().getBooleanExtra("OPEN_ENCRYPTION", true); // 获取是否启用加密
 
         isOnlyAudio = getIntent().getBooleanExtra("isOnlyAudio", false);
         initViews();
@@ -522,6 +526,10 @@ public class VideoChatActivity extends Activity {
     }
 
     private void initMediasoup() {
+        // 设置加密模式到 RoomClient
+        roomClient.setSM4Encryption(useSM4Encryption);
+        // 设置是否启用加密到 RoomClient
+        roomClient.setOpenEncryption(openEncryption);
 
         roomClient.setMediasoupClientListener(new RoomClient.MediasoupClientListener() {
             @Override

@@ -71,10 +71,8 @@ namespace webrtc {
         // 预定义的固定 SM4 密钥和 CTR（用于初始化）
         static const uint8_t DEFAULT_SM4_KEY[16];
         static const uint8_t DEFAULT_SM4_CTR[16];
-        int64_t v_total_us_dec_ = 0;
-        size_t v_total_bytes_dec_ = 0;
-        int v_frame_count_dec_ = 0;
-        int64_t v_max_us_dec_ = 0;
+        size_t v_frame_count_ = 0;
+        int64_t v_total_us_ = 0;
     };
 
 }  // namespace webrtc

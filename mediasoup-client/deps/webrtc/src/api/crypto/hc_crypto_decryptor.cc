@@ -46,73 +46,46 @@ namespace webrtc {
             rtc::ArrayView<const uint8_t> additional_data,
             rtc::ArrayView<const uint8_t> encrypted_frame,
             rtc::ArrayView<uint8_t> frame) {
-        if (fail_decryption_) {
-            return Result(Status::kFailedToDecrypt, 0);
-        }
-        // --- 性能测试相关：1. 记录解密开始时间 ---
+        if (fail_decryption_) return Result(Status::kFailedToDecrypt, 0);
+
         int64_t start_time = rtc::TimeMicros();
+        bool is_key_frame = false;
+        if (media_type == cricket::MEDIA_TYPE_VIDEO && encrypted_frame.size() > 0) {
+            is_key_frame = ((encrypted_frame[0] & 0x01) == 0);
+        }
+
+        // 同步判定逻辑：true(全量) / false(仅关键帧)
+        bool perform_crypto = use_sm4_decryption_ ? true : is_key_frame;
 
         RTC_CHECK_EQ(frame.size() + 1, encrypted_frame.size());
 
-        if (use_sm4_decryption_) {
-            // 使用 SM4-CTR 解密
+        // 第二道防线：关键帧模式下，如果后缀标记不对，说明没加密，降级为拷贝
+        if (perform_crypto && !use_sm4_decryption_ && encrypted_frame[frame.size()] != expected_postfix_byte_) {
+            perform_crypto = false;
+        }
+
+        if (perform_crypto) {
             uint8_t local_ctr[16];
-            memcpy(local_ctr, sm4_ctr_, 16);  // 使用本地副本避免修改原始 CTR
-            
-            // 调用 GmSSL 的 SM4-CTR 解密函数（CTR 模式加密和解密使用相同的操作）
-            sm4_ctr_encrypt(&sm4_key_, local_ctr,
-                           encrypted_frame.data(), frame.size(),
-                           frame.data());
-            
-            RTC_LOG(LS_INFO) << "[HCCrypto] SM4-CTR decrypted " << frame.size() << " bytes";
+            memcpy(local_ctr, sm4_ctr_, 16);
+            sm4_ctr_encrypt(&sm4_key_, local_ctr, encrypted_frame.data(), frame.size(), frame.data());
         } else {
-            // 使用原有的 XOR 解密（保持向后兼容）
-            for (size_t i = 0; i < frame.size(); i++) {
-                frame[i] = encrypted_frame[i] ^ fake_key_;
-            }
-            RTC_LOG(LS_INFO) << "[HCCrypto] XOR decrypted " << frame.size() << " bytes";
+            memcpy(frame.data(), encrypted_frame.data(), frame.size());
         }
 
-        // 验证后缀字节
-        if (encrypted_frame[frame.size()] != expected_postfix_byte_) {
-            RTC_LOG(LS_ERROR) << "[HCCrypto] Invalid postfix byte, expected " 
-                           << expected_postfix_byte_ << ", got " 
-                           << encrypted_frame[frame.size()];
-            return Result(Status::kFailedToDecrypt, 0);
-        }
-
-
-        // --- 性能测试相关：2. 针对视频进行统计处理 ---
+        // 解密统计 (修正了截图中的变量名错误)
         if (media_type == cricket::MEDIA_TYPE_VIDEO) {
             int64_t elapsed_us = rtc::TimeMicros() - start_time;
+            v_total_us_ += elapsed_us;
+            v_frame_count_++;
 
-            v_total_us_dec_ += elapsed_us;     // 注意：建议在头文件中定义独立的解密统计变量
-            v_total_bytes_dec_ += frame.size();
-            v_frame_count_dec_++;
-
-            if (elapsed_us > v_max_us_dec_) v_max_us_dec_ = elapsed_us;
-
-            // 每 300 帧输出一次报告
-            if (v_frame_count_dec_ >= 300) {
-                double avg_us = static_cast<double>(v_total_us_dec_) / v_frame_count_dec_;
-                double duration_sec = v_total_us_dec_ / 1000000.0;
-                double mbps = (duration_sec > 0) ? (v_total_bytes_dec_ * 8.0 / 1024 / 1024) / duration_sec : 0;
-
-                RTC_LOG(LS_WARNING) << ">>> [VideoDec Performance] "
-                                    << "Frames: " << v_frame_count_dec_
-                                    << " | Avg: " << avg_us << " us"
-                                    << " | Max: " << v_max_us_dec_ << " us"
-                                    << " | Throughput: " << mbps << " Mbps";
-
-                // 重置统计量
-                v_total_us_dec_ = 0;
-                v_total_bytes_dec_ = 0;
-                v_frame_count_dec_ = 0;
-                v_max_us_dec_ = 0;
+            if (v_frame_count_ >= 300) {
+                double avg = static_cast<double>(v_total_us_) / v_frame_count_;
+                RTC_LOG(LS_WARNING) << ">>> [Decrypt Performance Contrast] <<<"
+                                    << "\n| Mode: " << (use_sm4_decryption_ ? "FULL" : "KEY-ONLY")
+                                    << "\n| Avg Decrypt Latency: " << avg << " us";
+                v_total_us_ = 0; v_frame_count_ = 0;
             }
         }
-
-        RTC_LOG(LS_INFO) << "[HCCrypto] decrypt success, status=OK";
         return Result(Status::kOk, frame.size());
     }
 

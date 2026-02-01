@@ -29,10 +29,76 @@
         android:text="123456"
         android:inputType="text"
         android:maxLines="1"
-        android:layout_marginBottom="25dp"
+        android:layout_marginBottom="15dp"
         android:paddingHorizontal="10dp"
         android:paddingVertical="8dp"
         android:background="@drawable/edittext_bg" />
+
+    <!-- 是否启用加密开关 -->
+    <Switch
+        android:id="@+id/switch_encryption"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="启用加密"
+        android:textSize="16sp"
+        android:checked="true"
+        android:layout_marginBottom="20dp" />
+
+    <!-- 加密模式选择 -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="选择加密模式"
+        android:textSize="14sp"
+        android:textColor="#666666"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="8dp"
+        android:gravity="start" />
+
+    <RadioGroup
+        android:id="@+id/encryption_mode_group"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_marginBottom="20dp">
+
+        <RadioButton
+            android:id="@+id/rb_max_privacy"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="极致安全模式 (Maximum Privacy)"
+            android:textSize="14sp"
+            android:checked="true"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="适用于高度机密会议，确保每一帧数据均受强国密保护。"
+            android:textSize="12sp"
+            android:textColor="#999999"
+            android:layout_marginStart="32dp"
+            android:layout_marginBottom="8dp" />
+
+        <RadioButton
+            android:id="@+id/rb_balanced"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="平衡性能模式 (Balanced Performance)"
+            android:textSize="14sp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="适用于普通通话，在保障隐私的同时，大幅延长手机续航并降低发热。"
+            android:textSize="12sp"
+            android:textColor="#999999"
+            android:layout_marginStart="32dp" />
+
+    </RadioGroup>
 
     <!-- 跳转按钮 -->
     <Button

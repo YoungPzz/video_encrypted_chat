@@ -38,70 +38,62 @@ namespace webrtc {
                           rtc::ArrayView<const uint8_t> frame,
                           rtc::ArrayView<uint8_t> encrypted_frame,
                           size_t* bytes_written) {
-        if (fail_encryption_) {
-            return static_cast<int>(FakeEncryptionStatus::FORCED_FAILURE);
-        }
-        int64_t start_time = rtc::TimeMicros(); // 性能测试相关 ------------ 1. 记录加密开始时间
+        if (fail_encryption_) return static_cast<int>(FakeEncryptionStatus::FORCED_FAILURE);
 
+        int64_t start_time = rtc::TimeMicros();
+
+        // 1. 识别 VP8 关键帧
+        bool is_key_frame = false;
+        if (media_type == cricket::MEDIA_TYPE_VIDEO && frame.size() > 0) {
+            is_key_frame = ((frame[0] & 0x01) == 0);
+        }
+
+        // 2. 根据 use_sm4_encryption_ 定义判定逻辑
+        // true -> 全量加密; false -> 仅关键帧加密
+        bool perform_crypto = use_sm4_encryption_ ? true : is_key_frame;
 
         RTC_CHECK_EQ(frame.size() + 1, encrypted_frame.size());
 
-        if (use_sm4_encryption_) {
-            // 使用 SM4-CTR 加密
+        if (perform_crypto) {
+            // 执行 SM4 加密运算
             uint8_t local_ctr[16];
-            memcpy(local_ctr, sm4_ctr_, 16);  // 使用本地副本避免修改原始 CTR
-            
-            // 调用 GmSSL 的 SM4-CTR 加密函数
-            sm4_ctr_encrypt(&sm4_key_, local_ctr,
-                           frame.data(), frame.size(),
-                           encrypted_frame.data());
-            
-            *bytes_written = frame.size();
-//            RTC_LOG(LS_INFO) << "[HCCrypto] SM4-CTR encrypted " << frame.size() << " bytes"; 避免对加密性能的测试银杏果
+            memcpy(local_ctr, sm4_ctr_, 16);
+            sm4_ctr_encrypt(&sm4_key_, local_ctr, frame.data(), frame.size(), encrypted_frame.data());
+            encrypted_frame[frame.size()] = postfix_byte_; // 写入加密后缀标记
         } else {
-            // 使用原有的 XOR 加密（保持向后兼容）
-            for (size_t i = 0; i < frame.size(); i++) {
-                encrypted_frame[i] = frame[i] ^ fake_key_;
-            }
-            *bytes_written = frame.size();
-//            RTC_LOG(LS_INFO) << "[HCCrypto] XOR encrypted " << frame.size() << " bytes";
+            // 不满足加密条件（即：Mode为关键帧模式且当前是P帧），执行透传
+            memcpy(encrypted_frame.data(), frame.data(), frame.size());
+            encrypted_frame[frame.size()] = 0x00; // 写入非加密后缀标记
         }
 
-        encrypted_frame[frame.size()] = postfix_byte_;
-        *bytes_written += 1;
+        *bytes_written = frame.size() + 1;
+        int64_t elapsed_us = rtc::TimeMicros() - start_time;
 
-        //  性能测试相关 ------------ 2. 针对视频进行统计处理
+        // 3. 数据统计与对比处理
         if (media_type == cricket::MEDIA_TYPE_VIDEO) {
-            int64_t elapsed_us = rtc::TimeMicros() - start_time;
-
             v_total_us_ += elapsed_us;
-            v_total_bytes_ += frame.size();
             v_frame_count_++;
+            if (is_key_frame) {
+                v_key_frame_count_++;
+                v_key_frame_total_us_ += elapsed_us;
+                if (elapsed_us > v_max_us_) v_max_us_ = elapsed_us;
+            }
 
-            if (elapsed_us > v_max_us_) v_max_us_ = elapsed_us;
-
-            // 每 300 帧（约 10 秒 @ 30fps）输出一次报告
             if (v_frame_count_ >= 300) {
-                double avg_us = static_cast<double>(v_total_us_) / v_frame_count_;
-                // 计算吞吐量 (Mbps)
-                double duration_sec = v_total_us_ / 1000000.0;
-                double mbps = (duration_sec > 0) ? (v_total_bytes_ * 8.0 / 1024 / 1024) / duration_sec : 0;
+                double total_avg = static_cast<double>(v_total_us_) / v_frame_count_;
+                double key_avg = (v_key_frame_count_ > 0) ? (double)v_key_frame_total_us_ / v_key_frame_count_ : 0;
 
-                RTC_LOG(LS_WARNING) << ">>> [VideoCrypto Performance] "
-                                    << "Frames: " << v_frame_count_
-                                    << " | Avg: " << avg_us << " us"
-                                    << " | Max: " << v_max_us_ << " us"
-                                    << " | Throughput: " << mbps << " Mbps";
+                RTC_LOG(LS_WARNING) << ">>> [Encrypt Contrast Report] <<<"
+                                    << "\n| Current Mode: " << (use_sm4_encryption_ ? "FULL-ENCRYPT" : "KEY-FRAME-ONLY")
+                                    << "\n| Total System Avg: " << total_avg << " us"
+                                    << "\n| I-Frame Crypto Avg: " << key_avg << " us"
+                                    << "\n| Max Jitter (I-Frame): " << v_max_us_ << " us"
+                                    << "\n| Sample Frames: " << v_frame_count_ << " (Keys: " << v_key_frame_count_ << ")";
 
-                // 重置统计量以便下一轮观察
-                v_total_us_ = 0;
-                v_total_bytes_ = 0;
-                v_frame_count_ = 0;
-                v_max_us_ = 0;
+                // 重置统计量
+                v_total_us_ = 0; v_frame_count_ = 0; v_key_frame_count_ = 0; v_key_frame_total_us_ = 0; v_max_us_ = 0;
             }
         }
-
-        RTC_LOG(LS_INFO) << "[HCCrypto] encrypt success, status=" << FakeEncryptionStatus::OK;
         return static_cast<int>(FakeEncryptionStatus::OK);
     }
     void HCCrypto::SetFakeKey(uint8_t fake_key) {

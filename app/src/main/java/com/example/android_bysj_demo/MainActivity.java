@@ -7,6 +7,8 @@ import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.RadioGroup;
+import android.widget.Switch;
 import android.widget.Toast;
 
 public class MainActivity extends AppCompatActivity {
@@ -15,6 +17,10 @@ public class MainActivity extends AppCompatActivity {
     private EditText etRoomId;
     private Button btnJump;
     private Button btnPerformance;
+    private RadioGroup encryptionModeGroup;
+    private Switch switchEncryption;
+    private boolean useSM4Encryption = true; // 默认使用极致安全模式
+    private boolean openEncryption = true; // 是否启用加密
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -43,6 +49,8 @@ public class MainActivity extends AppCompatActivity {
             Intent intent = new Intent(MainActivity.this, VideoChatActivity.class);
             intent.putExtra("USER_ID", userId);
             intent.putExtra("ROOM_ID", roomId);
+            intent.putExtra("USE_SM4_ENCRYPTION", useSM4Encryption); // 传递加密模式
+            intent.putExtra("OPEN_ENCRYPTION", openEncryption); // 传递是否启用加密
             startActivity(intent);
         });
 
@@ -60,5 +68,17 @@ public class MainActivity extends AppCompatActivity {
         etRoomId = findViewById(R.id.et_room_id);
         btnJump = findViewById(R.id.btn_jump);
         btnPerformance = findViewById(R.id.btn_performance);
+        encryptionModeGroup = findViewById(R.id.encryption_mode_group);
+        switchEncryption = findViewById(R.id.switch_encryption);
+
+        // 设置加密模式选择监听
+        encryptionModeGroup.setOnCheckedChangeListener((group, checkedId) -> {
+            useSM4Encryption = (checkedId == R.id.rb_max_privacy);
+        });
+
+        // 设置加密开关监听
+        switchEncryption.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            openEncryption = isChecked;
+        });
     }
 }
