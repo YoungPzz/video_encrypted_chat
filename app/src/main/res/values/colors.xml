@@ -198,4 +198,8 @@
     <color name="video_chat_button_background">#80FFFFFF</color>
     <color name="video_chat_button_background_red">#FFFF4444</color>
     <color name="status_background">#80000000</color>
+
+    <!-- 登录页面 -->
+    <color name="gradient_start">#4A90E2</color>
+    <color name="gradient_end">#2196F3</color>
 </resources>

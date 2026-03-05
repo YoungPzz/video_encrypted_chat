@@ -33,7 +33,7 @@ public class RoomCreationActivity extends AppCompatActivity {
     private static final String TAG = "RoomCreationActivity";
 
     // 服务器配置
-    private static final String WEBSOCKET_SERVER_URL = "ws://192.168.2.191:3000";  // 本地服务器地址
+    private static final String WEBSOCKET_SERVER_URL = "ws://10.104.43.157:3000";  // 本地服务器地址
 
     // UI组件
     private EditText etUserId;
@@ -245,6 +245,11 @@ public class RoomCreationActivity extends AppCompatActivity {
                     // 处理房间消息
                     handleRoomMessage(json);
                     break;
+
+                case "user_left":
+                    // 处理成员退出，进入密钥恢复界面
+                    handleUserLeft(json);
+                    break;
                 // 其他消息类型处理...
             }
         } catch (JSONException e) {
@@ -394,6 +399,25 @@ public class RoomCreationActivity extends AppCompatActivity {
         Log.d(TAG, "Room created successfully: " + resultInfo);
 
         Toast.makeText(this, "房间创建成功!", Toast.LENGTH_SHORT).show();
+    }
+
+    /**
+     * 处理成员退出事件
+     */
+    private void handleUserLeft(JSONObject json) {
+        try {
+            String leftUserId = json.optString("userId", "");
+            String userName = json.optString("userName", "未知用户");
+
+            Log.d(TAG, "User left: " + userName + " (" + leftUserId + ")");
+
+            // 跳转到密钥恢复界面
+            Intent intent = new Intent(this, KeyRecoveryActivity.class);
+            startActivity(intent);
+
+        } catch (Exception e) {
+            Log.e(TAG, "Error handling user_left event", e);
+        }
     }
 
     /**

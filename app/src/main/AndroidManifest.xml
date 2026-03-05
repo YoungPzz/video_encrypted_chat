@@ -37,15 +37,23 @@
             android:exported="false">
         </activity>
         <activity
-            android:name=".KeyNegotiationActivity"
-            android:exported="false">
-        </activity>
-        <activity
             android:name=".RoomCreationActivity"
             android:exported="false">
         </activity>
         <activity
             android:name=".PerformanceClassActivity"
+            android:exported="false">
+        </activity>
+        <activity
+            android:name=".LoginActivity"
+            android:exported="false">
+        </activity>
+        <activity
+            android:name=".ContactsActivity"
+            android:exported="false">
+        </activity>
+        <activity
+            android:name=".KeyRecoveryActivity"
             android:exported="false">
         </activity>
 
