@@ -50,6 +50,14 @@ public class HCCryptoDecryptor {
     public native void nativeSetSM4CTR(long ptr, byte[] ctr);
 
     /**
+     * 设置 SM4 密钥和版本号
+     * @param ptr Native 指针
+     * @param key 16字节的 SM4 密钥
+     * @param version 密钥版本号
+     */
+    public native void nativeSetSM4KeyWithVersion(long ptr, byte[] key, int version);
+
+    /**
      * 释放资源
      */
     public void dispose() {
@@ -87,5 +95,33 @@ public class HCCryptoDecryptor {
         if (nativeHCCryptoDecryptorPtr != 0) {
             nativeSetSM4CTR(nativeHCCryptoDecryptorPtr, ctr);
         }
+    }
+
+    /**
+     * 设置 SM4 密钥和版本号
+     * @param key 16字节的 SM4 密钥
+     * @param version 密钥版本号
+     */
+    public void setSM4KeyWithVersion(byte[] key, int version) {
+        if (nativeHCCryptoDecryptorPtr != 0) {
+            nativeSetSM4KeyWithVersion(nativeHCCryptoDecryptorPtr, key, version);
+        }
+    }
+
+    /**
+     * 获取当前密钥版本号
+     * @return 当前密钥版本号
+     */
+    public native int nativeGetKeyVersion(long ptr);
+
+    /**
+     * 获取当前密钥版本号
+     * @return 当前密钥版本号
+     */
+    public int getKeyVersion() {
+        if (nativeHCCryptoDecryptorPtr != 0) {
+            return nativeGetKeyVersion(nativeHCCryptoDecryptorPtr);
+        }
+        return 0;
     }
 }

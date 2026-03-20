@@ -32,9 +32,6 @@ import java.util.Map;
 public class RoomCreationActivity extends AppCompatActivity {
     private static final String TAG = "RoomCreationActivity";
 
-    // 服务器配置
-    private static final String WEBSOCKET_SERVER_URL = "ws://10.104.43.157:3000";  // 本地服务器地址
-
     // UI组件
     private EditText etUserId;
     private EditText etRoomId;
@@ -53,6 +50,7 @@ public class RoomCreationActivity extends AppCompatActivity {
     private String userId;
     private String roomId;
     private WebSocketManager wsManager;
+    private KNSConnectManager knsConnectManager;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -68,6 +66,7 @@ public class RoomCreationActivity extends AppCompatActivity {
 
         initViews();
         setupClickListeners();
+        knsConnectManager = KNSConnectManager.getInstance();
     }
 
     private void initViews() {
@@ -131,66 +130,8 @@ public class RoomCreationActivity extends AppCompatActivity {
         roomId = currentRoomId;
 
         // 步骤1：建立WebSocket连接
-        establishWebSocketConnection();
-    }
-
-    /**
-     * 建立WebSocket连接
-     */
-    private void establishWebSocketConnection() {
-        try {
-            // 使用标准 WebSocket 连接
-            wsManager = new WebSocketManager(new WebSocketManager.WebSocketEventListener() {
-                @Override
-                public void onConnected() {
-                    new Handler(Looper.getMainLooper()).post(() -> {
-                        Toast.makeText(RoomCreationActivity.this, "WebSocket连接成功", Toast.LENGTH_SHORT).show();
-                        Log.d(TAG, "WebSocket connected successfully");
-                        // 步骤2：WebSocket连接成功后，发送 create_room 事件创建房间
-//                        sendCreateRoomEvent();
-                        wsManager.createRoom("1", "room_1");
-                    });
-                }
-
-                @Override
-                public void onDisconnected(int code, String reason) {
-                    new Handler(Looper.getMainLooper()).post(() -> {
-                        Toast.makeText(RoomCreationActivity.this,
-                                "WebSocket断开: " + reason + " (" + code + ")",
-                                Toast.LENGTH_SHORT).show();
-                        Log.d(TAG, "WebSocket disconnected: " + code + ", " + reason);
-                    });
-                }
-
-                @Override
-                public void onMessage(String message) {
-                    // 处理服务器消息，切换到主线程更新UI
-                    Log.d(TAG, "Received message: " + message);
-                    new Handler(Looper.getMainLooper()).post(() -> {
-                        handleServerMessage(message);
-                    });
-                }
-
-                @Override
-                public void onError(String error) {
-                    new Handler(Looper.getMainLooper()).post(() -> {
-                        Toast.makeText(RoomCreationActivity.this,
-                                "WebSocket连接失败: " + error,
-                                Toast.LENGTH_LONG).show();
-                        Log.e(TAG, "WebSocket error: " + error);
-                    });
-                }
-            });
-
-            // 开始连接
-            Log.d(TAG, "Attempting to connect to: " + WEBSOCKET_SERVER_URL);
-            wsManager.connect(WEBSOCKET_SERVER_URL);
-            Toast.makeText(this, "正在连接WebSocket服务器...", Toast.LENGTH_SHORT).show();
-
-        } catch (Exception e) {
-            Toast.makeText(this, "WebSocket初始化失败: " + e.getMessage(), Toast.LENGTH_LONG).show();
-            Log.e(TAG, "WebSocket initialization error", e);
-        }
+//        establishWebSocketConnection();
+        knsConnectManager.establishWebSocketConnection(roomId, userId);
     }
 
     /**
@@ -214,72 +155,16 @@ public class RoomCreationActivity extends AppCompatActivity {
             Log.e(TAG, "Build request data failed", e);
         }
     }
-
     /**
-     * 处理服务器消息
+     * 模拟SM3哈希计算（仅用于演示）
      */
-    private void handleServerMessage(String message) {
-        try {
-            JSONObject json = new JSONObject(message);
-            String type = json.getString("type");
-
-            switch (type) {
-                case "welcome":
-                    // 处理欢迎消息和服务器公钥
-                    handleWelcomeMessage(json);
-                    break;
-                case "room_list":
-                    // 处理房间列表
-                    handleRoomList(json);
-                    break;
-
-                case "room_joined":
-                    handlerRoomJoined(json);
-                    break;
-
-                case "room_created":
-                    handlerRoomCreated(json);
-                    break;
-
-                case "room_message":
-                    // 处理房间消息
-                    handleRoomMessage(json);
-                    break;
-
-                case "user_left":
-                    // 处理成员退出，进入密钥恢复界面
-                    handleUserLeft(json);
-                    break;
-                // 其他消息类型处理...
-            }
-        } catch (JSONException e) {
-            e.printStackTrace();
+    private String calculateMockSM3Hash(String data) {
+        // 实际项目中应使用真正的SM3算法
+        int hash = 0;
+        for (char c : data.toCharArray()) {
+            hash = 31 * hash + c;
         }
-    }
-
-    private void handlerRoomCreated(JSONObject json) {
-        Log.d(TAG, "Room created: " + json.toString());
-    }
-
-    private void handlerRoomJoined(JSONObject json) {
-        Log.d(TAG, "Room joined: " + json.toString());
-        try {
-            // 使用 RoomInfo JavaBean 解析
-            RoomInfo roomInfo = RoomInfo.fromJson(json);
-            RoomInfo.RoomData room = roomInfo.room;
-            Log.d(TAG, room.toString());
-
-            // 解析SM4密钥
-            String originSm4Key = room.sm4Key;
-            tvSm4Key.setText(originSm4Key);
-            String sm4Key = ShamirSm4KeyReconstructor.reconstructSm4Key(roomInfo.room.shamirShares);
-            tvRecoveredKeyInfo.setText(sm4Key);
-
-
-        } catch (JSONException e) {
-            Log.e(TAG, "Error parsing room_joined message", e);
-            Toast.makeText(this, "解析房间数据失败", Toast.LENGTH_SHORT).show();
-        }
+        return String.format("SM3_%08X", hash);
     }
 
     /**
@@ -369,61 +254,10 @@ public class RoomCreationActivity extends AppCompatActivity {
         sb.append("]");
         return sb.toString();
     }
-
-    private void handleRoomMessage(JSONObject json) {
-    }
-
-    private void handleRoomList(JSONObject json) {
-    }
-
-    private void handleWelcomeMessage(JSONObject json) {
-    }
-
-    /**
-     * 处理创建房间响应
-     */
-    private void handleCreateRoomResponse(JSONObject response) throws JSONException {
-        String createdRoomId = response.optString("roomId", "");
-        String createdRoomName = response.optString("roomName", "");
-        String message = response.optString("message", "房间创建成功");
-
-        // 显示创建成功信息
-        String resultInfo = String.format(
-                "=== 房间创建成功 ===\n" +
-                "房间ID: %s\n" +
-                "房间名称: %s\n" +
-                "消息: %s",
-                createdRoomId, createdRoomName, message
-        );
-        tvRecoveredKeyInfo.setText(resultInfo);
-        Log.d(TAG, "Room created successfully: " + resultInfo);
-
-        Toast.makeText(this, "房间创建成功!", Toast.LENGTH_SHORT).show();
-    }
-
-    /**
-     * 处理成员退出事件
-     */
-    private void handleUserLeft(JSONObject json) {
-        try {
-            String leftUserId = json.optString("userId", "");
-            String userName = json.optString("userName", "未知用户");
-
-            Log.d(TAG, "User left: " + userName + " (" + leftUserId + ")");
-
-            // 跳转到密钥恢复界面
-            Intent intent = new Intent(this, KeyRecoveryActivity.class);
-            startActivity(intent);
-
-        } catch (Exception e) {
-            Log.e(TAG, "Error handling user_left event", e);
-        }
-    }
-
     /**
      * 进入视频聊天房间
      */
-    private void enterVideoChat() {
+    public void enterVideoChat() {
         // 获取当前输入框中的用户ID和房间ID
         String currentUserId = etUserId.getText().toString().trim();
         String currentRoomId = etRoomId.getText().toString().trim();

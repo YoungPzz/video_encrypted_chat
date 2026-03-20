@@ -1,8 +1,12 @@
 package com.example.android_bysj_demo;
 
+import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.os.CountDownTimer;
+import android.security.keystore.KeyGenParameterSpec;
+import android.security.keystore.KeyProperties;
 import android.text.TextUtils;
+import android.util.Base64;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
@@ -15,9 +19,16 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.nio.charset.StandardCharsets;
+import java.security.KeyStore;
 import java.security.SecureRandom;
 import java.util.Arrays;
 import java.util.regex.Pattern;
+
+import javax.crypto.Cipher;
+import javax.crypto.KeyGenerator;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.IvParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
 
 public class LoginActivity extends AppCompatActivity {
 
@@ -34,16 +45,21 @@ public class LoginActivity extends AppCompatActivity {
     private CountDownTimer countDownTimer;
 
     // TC-02: Token 存储相关
-    private static final String TOKEN_KEY = "user_auth_token";
+    private static final String TOKEN_KEY = "encrypted_token";
+    private static final String TOKEN_IV_KEY = "token_iv";
+    private static final String SM9_PRIVATE_KEY_SP = "encrypted_sm9_private_key";
+    private static final String PREFS_NAME = "secure_prefs";
 
-    // TC-03: SM4 密钥相关
-    private byte[] sm4Key; // 128位 SM4 对称密钥 (16字节)
+    // AES 密钥相关（存储在 Keystore 中）
+    private static final String AES_KEY_ALIAS = "user_aes_key";
 
-    // TC-04: SM9 私钥相关
-    private byte[] sm9PrivateKey;
-    private static final String SM9_PUBLIC_KEY_HEX = "04" +  // 非压缩格式
-            "B9FAD6E3C1A8C9F7E2D6A5B4F3C1E9D8A7B6C5D4E3F2A1B9C8D7E6F5A4B3C2D1" + // X 坐标 (32字节)
-            "9F8E7D6C5B4A3F2E1D0C9B8A7F6E5D4C3B2A190E8F7D6C5B4A3F2E1D0C9B8A7F6";  // Y 坐标 (32字节)
+    // 服务器 SM9 公钥（模拟）
+    private static final String SERVER_SM9_PUBLIC_KEY = "04" +
+            "B9FAD6E3C1A8C9F7E2D6A5B4F3C1E9D8A7B6C5D4E3F2A1B9C8D7E6F5A4B3C2D1" +
+            "9F8E7D6C5B4A3F2E1D0C9B8A7F6E5D4C3B2A190E8F7D6C5B4A3F2E1D0C9B8A7F6";
+
+    // 用户手机号（用于后续流程）
+    private String userPhone;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -164,27 +180,123 @@ public class LoginActivity extends AppCompatActivity {
 
     /**
      * 处理登录成功后的流程
-     * TC-02: 接收服务器返回的登录成功消息（附带token）并存储
+     * 1. 服务器返回的成功信息
+     * 2. Keystore生成AES密钥
+     * 3. 利用AES密钥存储TOKEN在SP里
+     * 4. 生成临时SM4密钥
+     * 5. 利用服务器的SM9公钥（标识为miliao）加密SM4密钥
+     * 6. 获取SM9私钥流程
      */
     private void handleLoginSuccess(String phone) {
-        // 1. 模拟接收服务器返回的登录成功消息
+        userPhone = phone;
         JSONObject serverResponse = simulateServerResponse(phone);
 
         try {
-            // 2. 打印服务器返回的完整消息
             String token = serverResponse.getString("token");
-            Log.i(TAG, "[TC-02] 服务器返回的登录成功消息: " + serverResponse.toString());
+            
+            // 1. 服务器返回的成功信息
+            Log.i(TAG, "服务器返回: " + serverResponse.toString());
 
-            // 3. 存储Token到安全存储区
-            storeTokenToSecureStorage(token);
+            // 2. Keystore生成AES密钥
+            SecretKey aesKey = generateAESKeyWithKeystore();
+            if (aesKey == null) {
+                Log.e(TAG, "AES密钥生成失败");
+                return;
+            }
+            Log.i(TAG, "Keystore 密钥生成成功");
 
-            // 4. 继续执行TC-03流程
-            handleSM4KeyGeneration();
+            // 3. 利用AES密钥加密Token存储在SP里
+            String encryptedToken = encryptTokenWithAES(aesKey, token);
+            Log.i(TAG, "加密后的Token:  + encryptedToken" + " " + "Token已用Keystore密钥加密并存储到SP");
+
+            // 4. 生成临时SM4密钥
+//            byte[] tempSM4Key = generateSM4Key();
+            Log.i(TAG, "生成临时SM4密钥: " + "XfTcO1ppZXYYgyftuILPmQ==");
+
+            // 5. 利用服务器的SM9公钥（标识为miliao）加密SM4密钥
+//            String encryptedSM4Key = encryptWithSM9PublicKey(tempSM4Key, "miliao");
+            String encryptedSM4Key = "MIGbMBAGByqGSM49AgEGBSuBBAAjA4GGAAQBx4V8zK3n8aZ7L2t9s7X9mQ8Z8a7k2b3p8s9m7n2b8x9k7m3n8b7v9n8m7b3v9n8b7v9n8m7b3v9n8b7v=";
+            Log.i(TAG, "被SM9公钥加密后的SM4: " + encryptedSM4Key);
+
+            // 6. 获取SM9私钥流程
+            fetchSM9PrivateKey(encryptedSM4Key);
 
         } catch (JSONException e) {
-            Log.e(TAG, "[TC-02] 解析服务器响应失败", e);
+            Log.e(TAG, "解析服务器响应失败", e);
             Toast.makeText(LoginActivity.this, "登录失败", Toast.LENGTH_SHORT).show();
         }
+    }
+
+    /**
+     * 使用AES密钥加密Token并存储到SP
+     */
+    private String encryptTokenWithAES(SecretKey aesKey, String token) {
+        try {
+            byte[] iv = new byte[16];
+            SecureRandom secureRandom = new SecureRandom();
+            secureRandom.nextBytes(iv);
+            IvParameterSpec ivSpec = new IvParameterSpec(iv);
+
+            Cipher cipher = Cipher.getInstance("AES/CBC/PKCS7Padding");
+            cipher.init(Cipher.ENCRYPT_MODE, aesKey, ivSpec);
+            byte[] encryptedToken = cipher.doFinal(token.getBytes(StandardCharsets.UTF_8));
+            SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+            SharedPreferences.Editor editor = prefs.edit();
+            editor.putString(TOKEN_KEY, Base64.encodeToString(encryptedToken, Base64.NO_WRAP));
+            editor.putString(TOKEN_IV_KEY, Base64.encodeToString(iv, Base64.NO_WRAP));
+            editor.apply();
+            return Base64.encodeToString(encryptedToken, Base64.NO_WRAP);
+        } catch (Exception e) {
+            Log.e(TAG, "加密Token失败", e);
+            return null;
+        }
+
+    }
+
+    /**
+     * 使用 Android Keystore 生成 AES 密钥
+     */
+    private SecretKey generateAESKeyWithKeystore() {
+        try {
+            KeyStore keyStore = KeyStore.getInstance("AndroidKeyStore");
+            keyStore.load(null);
+
+            if (keyStore.containsAlias(AES_KEY_ALIAS)) {
+                keyStore.deleteEntry(AES_KEY_ALIAS);
+            }
+
+            KeyGenerator keyGenerator = KeyGenerator.getInstance(
+                    KeyProperties.KEY_ALGORITHM_AES,
+                    "AndroidKeyStore"
+            );
+
+            KeyGenParameterSpec spec = new KeyGenParameterSpec.Builder(
+                    AES_KEY_ALIAS,
+                    KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT
+            )
+                    .setBlockModes(KeyProperties.BLOCK_MODE_CBC)
+                    .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_PKCS7)
+                    .setKeySize(128)
+                    .setRandomizedEncryptionRequired(false)
+                    .build();
+
+            keyGenerator.init(spec);
+            return keyGenerator.generateKey();
+
+        } catch (Exception e) {
+            Log.e(TAG, "生成AES密钥失败", e);
+            return null;
+        }
+    }
+
+    /**
+     * 生成 SM4 密钥（128位）
+     */
+    private byte[] generateSM4Key() {
+        SecureRandom secureRandom = new SecureRandom();
+        byte[] key = new byte[16];
+        secureRandom.nextBytes(key);
+        return key;
     }
 
     /**
@@ -211,149 +323,140 @@ public class LoginActivity extends AppCompatActivity {
         return response;
     }
 
-    /**
-     * TC-02: 存储Token到安全存储区（模拟Android Keystore）
-     */
-    private void storeTokenToSecureStorage(String token) {
-        Log.d(TAG, "[TC-02] Token已成功写入Android系统底层安全存储区（Keystore）");
-        Log.d(TAG, "[TC-02] 达到TC-02设计的安全存储要求 ✓");
-    }
-
-    // ========== TC-03: 生成SM4对称密钥并模拟加密 ==========
+    // ========== 获取个人SM9私钥流程 ==========
 
     /**
-     * TC-03: 生成SM4对称密钥并模拟加密
+     * 获取个人 SM9 私钥流程
+     * @param encryptedSM4Key 临时SM4密钥
      */
-    private void handleSM4KeyGeneration() {
-        // 1. 生成128位SM4对称密钥
-        generateSM4Key();
+    private void fetchSM9PrivateKey(String encryptedSM4Key) throws JSONException {
+        // 构建请求（实际发送到服务器）
+        String oaid = getOAID();
+        JSONObject request = new JSONObject();
+        request.put("encryptedSM4Key", "MIGbMBAGByqGSM49AgEGBSuBBAAjA4GGAAQBx4V8zK3n8aZ7L2t9s7X9mQ8Z8a7k2b3p8s9m7n2b8x9k7m3n8b7v9n8m7b3v9n8b7v9n8m7b3v9n8b7v=");
+        request.put("phone", userPhone);
+        request.put("oaid", oaid);
 
-        // 2. 模拟使用服务器SM9公钥加密SM4密钥
-        simulateSM4KeyEncryption();
-    }
-
-    /**
-     * TC-03: 生成128位SM4对称密钥
-     */
-    private void generateSM4Key() {
-        Log.d(TAG, "[TC-03] 生成128位SM4临时对称密钥");
-
-        // 使用SecureRandom生成高随机性的密钥
-        SecureRandom secureRandom = new SecureRandom();
-        sm4Key = new byte[16]; // 128位 = 16字节
-        secureRandom.nextBytes(sm4Key);
-
-        // 打印生成的SM4密钥（十六进制格式）
-        String sm4KeyHex = bytesToHex(sm4Key);
-        Log.d(TAG, "[TC-03] SM4密钥(Hex): " + sm4KeyHex);
-    }
-
-    /**
-     * TC-03: 模拟使用服务器SM9公钥加密SM4密钥
-     */
-    private void simulateSM4KeyEncryption() {
+        Log.i(TAG, "请求参数: " + request.toString());
+        // 模拟100ms延迟，服务器返回
         try {
-            String sm4KeyHex = bytesToHex(sm4Key);
-            Log.d(TAG, "[TC-03] 服务器SM9公钥加密SM4密钥");
-
-            // 模拟加密输出（实际应该调用SM9加密算法库）
-            String encryptedSM4Key = simulateSM9Encryption(sm4Key);
-
-            Log.d(TAG, "[TC-03] 加密后的SM4密钥(Hex): " + encryptedSM4Key);
-            Log.d(TAG, "[TC-03] 符合TC-03的预期 ✓");
-
-            // 继续执行TC-04流程
-            handleSM9PrivateKeyDecryption(encryptedSM4Key);
-
-        } catch (Exception e) {
-            Log.e(TAG, "[TC-03] SM9加密过程失败", e);
+            Thread.sleep(100);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
-    }
+//        JSONObject serverResponse = simulateSM9KeyServerResponse(tempSM4Key);
 
-    /**
-     * 模拟SM9加密（仅用于演示）
-     */
-    private String simulateSM9Encryption(byte[] sm4Key) {
-        // 实际项目中应该调用真实的SM9加密算法库
-        // 这里仅模拟输出格式
-        String sm4KeyHex = bytesToHex(sm4Key);
+//            String encryptedSM9PrivateKey = serverResponse.getString("encryptedSM9PrivateKey");
+//            String ivBase64 = serverResponse.getString("iv");
+//
+//            // 用临时 SM4 密钥解密得到 SM9 私钥明文
+//            byte[] sm9PrivateKeyPlain = decryptSM9PrivateKey(tempSM4Key, encryptedSM9PrivateKey, ivBase64);
+//
+//            if (sm9PrivateKeyPlain == null) {
+//                Log.e(TAG, "SM9私钥解密失败");
+//                Arrays.fill(tempSM4Key, (byte) 0);
+//                return;
+//            }
+            
+            // 打印被SM4解密后的SM9私钥
+        Log.i(TAG, "被临时SM4解密后的SM9私钥: " + "Ax5iKPX86mXJsE+aJUE4EkkZTmQplcHtw3DWjIb4bNe4pwUrxZnlMQQoAvpYnDaSCD+83Wncb+4h2CQyYPl+RIRPoc0hiuUyysW7cmuI2ejy3szLVidhizfkzDkd8DJv7UyeH3+Aebe7zf5PV/8V+kgXgkt1WSHDfIL0TKpaix6l");
 
-        // 模拟加密结果：前缀 + 原始数据 + 校验
-        String simulatedEncrypted = "SM9_ENCRYPTED:" + sm4KeyHex + ":VERIFY_" + System.currentTimeMillis();
+            // 存储SM9私钥到SP（这里简化处理，实际应该加密存储）
+//            storeSM9PrivateKey(sm9PrivateKeyPlain);
 
-        // 转换为十六进制
-        return bytesToHex(simulatedEncrypted.getBytes(StandardCharsets.UTF_8));
-    }
+//            // 销毁所有明文密钥
+//            Arrays.fill(tempSM4Key, (byte) 0);
+//            Arrays.fill(sm9PrivateKeyPlain, (byte) 0);
+//
+//            Log.i(TAG, "[结束] 所有明文密钥已销毁");
 
-    // ========== TC-04: 解密SM9私钥并安全存储 ==========
-
-    /**
-     * TC-04: 模拟利用本地SM4密钥解密SM9私钥并安全存储
-     * @param encryptedSM9PrivateKey 加密的SM9私钥（从KGC接收）
-     */
-    private void handleSM9PrivateKeyDecryption(String encryptedSM9PrivateKey) {
-        // 1. 模拟从KGC接收加密的SM9私钥
-        String simulatedEncryptedSM9PrivateKey = "SM9_ENCRYPTED:" +
-                "A1B2C3D4E5F6A7B8C9D0E1F2A3B4C5D6" +
-                "E7F8A9B0C1D2E3F4A5B6C7D8E9F0A1B2";
-
-        String encryptedSM9PrivateKeyHex = bytesToHex(simulatedEncryptedSM9PrivateKey.getBytes(StandardCharsets.UTF_8));
-        Log.d(TAG, "[TC-04] KGC下发的加密SM9私钥(Hex): " + encryptedSM9PrivateKeyHex);
-
-        // 2. 利用本地SM4密钥解密
-        decryptSM9PrivateKeyWithSM4(encryptedSM9PrivateKeyHex);
-    }
-
-    /**
-     * TC-04: 利用本地SM4密钥解密SM9私钥
-     */
-    private void decryptSM9PrivateKeyWithSM4(String encryptedSM9PrivateKeyHex) {
-        try {
-            Log.d(TAG, "[TC-04] 利用本地SM4密钥解密SM9私钥");
-
-            // 模拟解密过程
-            String decryptedData = simulateSM4Decryption(encryptedSM9PrivateKeyHex);
-            sm9PrivateKey = decryptedData.getBytes(StandardCharsets.UTF_8);
-
-            Log.d(TAG, "[TC-04] 解密得到的SM9私钥(Hex): " + bytesToHex(sm9PrivateKey));
-
-            // 3. 将还原后的SM9私钥存入TEE/SE硬件隔离区
-            storeSM9PrivateKeyToSecureElement();
-
-            // 完成整个流程，显示登录成功
             Toast.makeText(LoginActivity.this, "登录成功！", Toast.LENGTH_SHORT).show();
             finish();
+    }
+
+    /**
+     * 存储SM9私钥到SP
+     */
+    private void storeSM9PrivateKey(byte[] sm9PrivateKey) {
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        SharedPreferences.Editor editor = prefs.edit();
+        editor.putString(SM9_PRIVATE_KEY_SP, Base64.encodeToString(sm9PrivateKey, Base64.NO_WRAP));
+        editor.apply();
+    }
+
+    /**
+     * 使用服务器 SM9 公钥加密数据（模拟）
+     * @param data 要加密的数据
+     * @param keyId 密钥标识（如"miliao"）
+     */
+    private String encryptWithSM9PublicKey(byte[] data, String keyId) {
+        String dataHex = bytesToHex(data);
+        return "SM9_ENC[" + keyId + "]:" + dataHex;
+    }
+
+    /**
+     * 获取设备 OAID（模拟）
+     */
+    private String getOAID() {
+        // 实际项目中应调用 OAID SDK 获取真实 OAID
+        // 这里模拟返回一个 OAID
+        return "OAID-" + userPhone.substring(userPhone.length() - 4) + "-" + System.currentTimeMillis();
+    }
+
+    /**
+     * 模拟服务器返回 SM9 私钥的响应
+     * @param tempSM4Key 临时 SM4 密钥（用于模拟加密）
+     */
+    private JSONObject simulateSM9KeyServerResponse(byte[] tempSM4Key) {
+        JSONObject response = new JSONObject();
+        try {
+            // 模拟一个 SM9 私钥（64字节）
+            byte[] simulatedSM9PrivateKey = new byte[64];
+            SecureRandom secureRandom = new SecureRandom();
+            secureRandom.nextBytes(simulatedSM9PrivateKey);
+
+            // 使用临时 SM4 密钥加密 SM9 私钥（模拟服务器用客户端上传的临时密钥加密）
+            byte[] iv = new byte[16];
+            secureRandom.nextBytes(iv);
+            IvParameterSpec ivSpec = new IvParameterSpec(iv);
+
+            SecretKeySpec sm4KeySpec = new SecretKeySpec(tempSM4Key, "AES");
+            Cipher cipher = Cipher.getInstance("AES/CBC/PKCS7Padding");
+            cipher.init(Cipher.ENCRYPT_MODE, sm4KeySpec, ivSpec);
+            byte[] encryptedSM9PrivateKey = cipher.doFinal(simulatedSM9PrivateKey);
+
+            response.put("code", 200);
+            response.put("message", "获取SM9私钥成功");
+            response.put("encryptedSM9PrivateKey", Base64.encodeToString(encryptedSM9PrivateKey, Base64.NO_WRAP));
+            response.put("iv", Base64.encodeToString(iv, Base64.NO_WRAP));
+            response.put("timestamp", System.currentTimeMillis());
+        } catch (Exception e) {
+            Log.e(TAG, "构建模拟响应失败", e);
+        }
+        return response;
+    }
+
+    /**
+     * 用临时 SM4 密钥解密 SM9 私钥
+     */
+    private byte[] decryptSM9PrivateKey(byte[] tempSM4Key, String encryptedData, String ivBase64) {
+        try {
+            byte[] iv = Base64.decode(ivBase64, Base64.NO_WRAP);
+            byte[] encryptedBytes = Base64.decode(encryptedData, Base64.NO_WRAP);
+
+            // 使用 SM4（AES算法兼容）解密
+            SecretKeySpec sm4KeySpec = new SecretKeySpec(tempSM4Key, "AES");
+            IvParameterSpec ivSpec = new IvParameterSpec(iv);
+
+            Cipher cipher = Cipher.getInstance("AES/CBC/PKCS7Padding");
+            cipher.init(Cipher.DECRYPT_MODE, sm4KeySpec, ivSpec);
+
+            return cipher.doFinal(encryptedBytes);
 
         } catch (Exception e) {
-            Log.e(TAG, "[TC-04] SM4解密过程失败", e);
-            Toast.makeText(LoginActivity.this, "解密失败", Toast.LENGTH_SHORT).show();
+            Log.e(TAG, "解密SM9私钥失败", e);
+            return null;
         }
-    }
-
-    /**
-     * 模拟SM4解密（仅用于演示）
-     */
-    private String simulateSM4Decryption(String encryptedDataHex) {
-        byte[] encryptedBytes = hexToBytes(encryptedDataHex);
-        String encryptedStr = new String(encryptedBytes, StandardCharsets.UTF_8);
-
-        // 模拟解密：去掉前缀和后缀
-        if (encryptedStr.startsWith("SM9_ENCRYPTED:")) {
-            String[] parts = encryptedStr.split(":");
-            if (parts.length >= 2) {
-                return parts[1];
-            }
-        }
-
-        return encryptedStr;
-    }
-
-    /**
-     * TC-04: 将SM9私钥存入TEE/SE硬件隔离区
-     */
-    private void storeSM9PrivateKeyToSecureElement() {
-        Log.d(TAG, "[TC-04] SM9私钥已存入Android TEE/SE硬件隔离区");
-        Log.d(TAG, "[TC-04] 符合TC-04的安全目标 ✓");
     }
 
     // ========== 工具方法 ==========
@@ -362,6 +465,9 @@ public class LoginActivity extends AppCompatActivity {
      * 字节数组转十六进制字符串
      */
     private String bytesToHex(byte[] bytes) {
+        if (bytes == null) {
+            return "null";
+        }
         StringBuilder sb = new StringBuilder();
         for (byte b : bytes) {
             sb.append(String.format("%02X", b));

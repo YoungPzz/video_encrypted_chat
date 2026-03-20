@@ -146,4 +146,61 @@ void Java_org_webrtc_HCCryptoDecryptor_nativeSetSM4CTR(JNIEnv* env, jobject thiz
     }
 }
 
+/**
+ * JNI: 设置 SM4 密钥和版本号
+ */
+void Java_org_webrtc_HCCryptoDecryptor_nativeSetSM4KeyWithVersion(JNIEnv* env, jobject thiz, jlong native_ptr, jbyteArray key, jint version) {
+    MSC_TRACE();
+
+    if (native_ptr == 0) {
+        MSC_WARN("HCCryptoDecryptor native pointer is null");
+        return;
+    }
+
+    if (key == nullptr || env->GetArrayLength(key) != 16) {
+        MSC_ERROR("Invalid SM4 key: must be 16 bytes");
+        return;
+    }
+
+    try {
+        webrtc::HCCryptoDecryptor* decryptor =
+            reinterpret_cast<webrtc::HCCryptoDecryptor*>(native_ptr);
+
+        jbyte* key_bytes = env->GetByteArrayElements(key, nullptr);
+        uint8_t sm4_key[16];
+        memcpy(sm4_key, key_bytes, 16);
+        env->ReleaseByteArrayElements(key, key_bytes, JNI_ABORT);
+
+        decryptor->SetSM4KeyWithVersion(sm4_key, version);
+
+        MSC_DEBUG("HCCryptoDecryptor SM4 key updated with version: %d", version);
+    }
+    catch (const std::exception& e) {
+        MSC_ERROR("Failed to set SM4 key with version: %s", e.what());
+    }
+}
+
+/**
+ * JNI: 获取当前密钥版本号
+ */
+jint Java_org_webrtc_HCCryptoDecryptor_nativeGetKeyVersion(JNIEnv* env, jobject thiz, jlong native_ptr) {
+    MSC_TRACE();
+
+    if (native_ptr == 0) {
+        MSC_WARN("HCCryptoDecryptor native pointer is null");
+        return 0;
+    }
+
+    try {
+        webrtc::HCCryptoDecryptor* decryptor =
+            reinterpret_cast<webrtc::HCCryptoDecryptor*>(native_ptr);
+
+        return decryptor->GetKeyVersion();
+    }
+    catch (const std::exception& e) {
+        MSC_ERROR("Failed to get key version: %s", e.what());
+        return 0;
+    }
+}
+
 } // extern "C"

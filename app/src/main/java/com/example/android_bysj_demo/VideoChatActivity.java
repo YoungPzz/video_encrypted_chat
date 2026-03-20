@@ -3,48 +3,42 @@ package com.example.android_bysj_demo;
 import android.Manifest;
 import android.app.Activity;
 import android.content.pm.PackageManager;
+import android.graphics.Color;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
+import android.util.TypedValue;
+import android.view.Gravity;
 import android.view.View;
+import android.widget.FrameLayout;
+import android.widget.GridLayout;
 import android.widget.ImageButton;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
-import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
-
-import org.json.JSONObject;
-import org.mediasoup.droid.MediasoupClient;
 import org.webrtc.AudioTrack;
 import org.webrtc.Camera2Enumerator;
 import org.webrtc.CameraEnumerator;
-import org.webrtc.DefaultVideoDecoderFactory;
-import org.webrtc.DefaultVideoEncoderFactory;
 import org.webrtc.EglBase;
-import org.webrtc.EncodedImage;
-import org.webrtc.FrameEncryptor;
 import org.webrtc.MediaConstraints;
 import org.webrtc.PeerConnectionFactory;
 import org.webrtc.SurfaceTextureHelper;
 import org.webrtc.SurfaceViewRenderer;
 import org.webrtc.VideoCapturer;
-import org.webrtc.VideoCodecStatus;
-import org.webrtc.VideoDecoderFactory;
-import org.webrtc.VideoEncoder;
-import org.webrtc.VideoEncoderFactory;
-import org.webrtc.VideoFrame;
-import org.webrtc.VideoSink;
 import org.webrtc.VideoSource;
 import org.webrtc.VideoTrack;
-import org.webrtc.*;
 
-
-import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 public class VideoChatActivity extends Activity {
@@ -57,13 +51,33 @@ public class VideoChatActivity extends Activity {
     };
 
     // UI Components
+    private FrameLayout remoteVideosContainer;
+    private FrameLayout localVideoPipContainer;
     private SurfaceViewRenderer localVideoView;
-    private SurfaceViewRenderer remoteVideoView;
+    private TextView localUserNameView;
     private ImageButton toggleAudioButton;
     private ImageButton toggleVideoButton;
     private ImageButton hangupButton;
     private TextView statusTextView;
     private TextView timerTextView;
+
+    // 用于管理多用户的轨道和视图映射
+    private Map<String, UserMediaInfo> userMediaMap = new HashMap<>();
+    private List<SurfaceViewRenderer> remoteVideoViews = new ArrayList<>();
+    
+    // 动态网格容器
+    private GridLayout gridLayout;
+
+    // 用户媒体信息类
+    private static class UserMediaInfo {
+        VideoTrack videoTrack;
+        AudioTrack audioTrack;
+        SurfaceViewRenderer videoView;
+        FrameLayout videoContainer;
+        TextView userNameTextView;
+        String participantId;
+        String userName;
+    }
 
     // WebRTC Components
     private EglBase eglBase;
@@ -85,8 +99,8 @@ public class VideoChatActivity extends Activity {
     private long callStartTime;
     private Handler timerHandler;
     private boolean isCallConnected = false;
-    private boolean useSM4Encryption = true; // 加密模式
-    private boolean openEncryption = true; // 是否启用加密
+    private boolean useSM4Encryption = true;
+    private boolean openEncryption = true;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -96,10 +110,10 @@ public class VideoChatActivity extends Activity {
         // Get intent extras
         roomId = getIntent().getStringExtra("ROOM_ID");
         userId = getIntent().getStringExtra("USER_ID");
-        useSM4Encryption = getIntent().getBooleanExtra("USE_SM4_ENCRYPTION", true); // 获取加密模式
-        openEncryption = getIntent().getBooleanExtra("OPEN_ENCRYPTION", true); // 获取是否启用加密
-
+        useSM4Encryption = getIntent().getBooleanExtra("USE_SM4_ENCRYPTION", true);
+        openEncryption = getIntent().getBooleanExtra("OPEN_ENCRYPTION", true);
         isOnlyAudio = getIntent().getBooleanExtra("isOnlyAudio", false);
+
         initViews();
         if (!checkPermissions()) {
             requestPermissions();
@@ -109,7 +123,6 @@ public class VideoChatActivity extends Activity {
     }
 
     private void initializeCall() {
-//        initViews();
         roomClient = new RoomClient(this, userId, roomId);
         initWebRTC();
         initMediasoup();
@@ -117,8 +130,10 @@ public class VideoChatActivity extends Activity {
     }
 
     private void initViews() {
+        remoteVideosContainer = (FrameLayout) findViewById(R.id.remote_videos_container);
+        localVideoPipContainer = (FrameLayout) findViewById(R.id.local_video_pip_container);
         localVideoView = (SurfaceViewRenderer) findViewById(R.id.local_video_view);
-        remoteVideoView = (SurfaceViewRenderer) findViewById(R.id.remote_video_view);
+        localUserNameView = (TextView) findViewById(R.id.local_user_name);
         toggleAudioButton = (ImageButton) findViewById(R.id.toggle_audio_button);
         toggleVideoButton = (ImageButton) findViewById(R.id.toggle_video_button);
         hangupButton = (ImageButton) findViewById(R.id.hangup_button);
@@ -126,12 +141,6 @@ public class VideoChatActivity extends Activity {
         timerTextView = (TextView) findViewById(R.id.timer_text_view);
 
         setupClickListeners();
-
-
-//        if (isOnlyAudio) {
-//            localVideoView.setVisibility(View.GONE);
-//            toggleVideoButton.setVisibility(View.GONE);
-//        }
     }
 
     private void setupClickListeners() {
@@ -140,323 +149,274 @@ public class VideoChatActivity extends Activity {
         hangupButton.setOnClickListener(v -> hangup());
     }
 
+    /**
+     * 创建新的视频视图容器
+     */
+    private FrameLayout createVideoViewContainer(String participantId, String userName) {
+        FrameLayout container = new FrameLayout(this);
+        container.setBackgroundColor(Color.parseColor("#1A1A2E"));
 
-//    /**
-//     * 使用异或操作加密视频帧的编码器包装类
-//     */
-//    public class XorEncryptingVideoEncoder implements VideoEncoder {
-//        private final VideoEncoder originalEncoder;
-//        private final byte xorKey; // 简单的单字节异或密钥
-//
-//        public XorEncryptingVideoEncoder(VideoEncoder originalEncoder, byte xorKey) {
-//            this.originalEncoder = originalEncoder;
-//            this.xorKey = xorKey;
-//        }
-//
-//        @Override
-//        public VideoCodecStatus initEncode(Settings settings, Callback callback) {
-//            // 包装回调以便在编码后加密
-//            Log.d(TAG, "XorEncryptingVideoEncoder.initEncode called");
-//            return originalEncoder.initEncode(settings, new EncryptingCallback(callback, xorKey));
-//        }
-//
-//        @Override
-//        public VideoCodecStatus release() {
-//            return originalEncoder.release();
-//        }
-//
-//        @Override
-//        public VideoCodecStatus encode(VideoFrame videoFrame, EncodeInfo encodeInfo) {
-//            // 传递给原始编码器处理
-//            Log.d(TAG, "XorEncryptingVideoEncoder.encode called");
-//            return originalEncoder.encode(videoFrame, encodeInfo);
-//        }
-//
-//        @Override
-//        public VideoCodecStatus setRateAllocation(BitrateAllocation bitrateAllocation, int frameRate) {
-//            return originalEncoder.setRateAllocation(bitrateAllocation, frameRate);
-//        }
-//
-//        @Override
-//        public ScalingSettings getScalingSettings() {
-//            return originalEncoder.getScalingSettings();
-//        }
-//
-//        @Override
-//        public String getImplementationName() {
-//            return "XorEncrypted-";
-//        }
-//
-//        /**
-//         * 包装编码器回调，用于加密编码后的帧
-//         */
-//        private  class EncryptingCallback implements Callback {
-//            private final Callback originalCallback;
-//            private final byte xorKey;
-//
-//            public EncryptingCallback(Callback originalCallback, byte xorKey) {
-//                this.originalCallback = originalCallback;
-//                this.xorKey = xorKey;
-//            }
-//
-//            @Override
-//            public void onEncodedFrame(EncodedImage encodedImage, CodecSpecificInfo codecSpecificInfo) {
-//                // 获取编码后的数据
-//                ByteBuffer buffer = encodedImage.buffer;
-//                int size = buffer.remaining();
-//                Log.d(TAG, "Encrypting frame: size=" + size +
-//                        " bytes, frameType=" + encodedImage.frameType +
-//                        ", timestamp=" + encodedImage.captureTimeNs);
-//
-//                // 创建新的缓冲区来存储加密数据
-//                byte[] encryptedData = new byte[size];
-//
-//                // 保存原始位置
-//                int originalPosition = buffer.position();
-//
-//                // 复制并加密数据
-//                for (int i = 0; i < size; i++) {
-//                    encryptedData[i] = (byte) (buffer.get() ^ xorKey); // 简单异或加密
-//                }
-//
-//                // 创建一个简单的释放回调
-//                Runnable releaseCallback = new Runnable() {
-//                    @Override
-//                    public void run() {
-//                        // 这里可以添加清理逻辑，如果需要
-//                        // 对于ByteBuffer.wrap创建的缓冲区，通常不需要特别的释放操作
-//                        // 但保留这个回调以满足API要求
-//                    }
-//                };
-//
-//                // 重置缓冲区位置
-//                buffer.position(originalPosition);
-//                // 将加密后的字节数组转换为ByteBuffer
-//                ByteBuffer encryptedBuffer = ByteBuffer.wrap(encryptedData);
-//
-//                // 创建新的EncodedImage - 使用适当的公共API
-//                EncodedImage.Builder builder = EncodedImage.builder()
-//                        .setBuffer(encryptedBuffer, releaseCallback)
-//                        .setFrameType(encodedImage.frameType)
-//                        .setRotation(encodedImage.rotation)
-//                        .setCaptureTimeNs(encodedImage.captureTimeNs);
-//
-//                // 设置其他可用的属性
-//                if (encodedImage.qp != null) {
-//                    builder.setQp(encodedImage.qp);
-//                }
-//
-//                EncodedImage encryptedImage = builder.createEncodedImage();
-//
-//                // 调用原始回调
-//                originalCallback.onEncodedFrame(encryptedImage, codecSpecificInfo);
-//            }
-//        }
-//    }
-//
-//    /**
-//     * 使用异或操作解密视频帧的解码器包装类
-//     */
-//    public class XorDecryptingVideoDecoder implements VideoDecoder {
-//        private final VideoDecoder originalDecoder;
-//        private final byte xorKey;
-//
-//        public XorDecryptingVideoDecoder(VideoDecoder originalDecoder, byte xorKey) {
-//            this.originalDecoder = originalDecoder;
-//            this.xorKey = xorKey;
-//        }
-//
-//        @Override
-//        public VideoCodecStatus initDecode(Settings settings, Callback callback) {
-//            return originalDecoder.initDecode(settings, callback);
-//        }
-//
-//        @Override
-//        public VideoCodecStatus release() {
-//            return originalDecoder.release();
-//        }
-//
-//        @Override
-//        public VideoCodecStatus decode(EncodedImage encodedImage, DecodeInfo decodeInfo) {
-//            // 获取加密的数据
-//            ByteBuffer buffer = encodedImage.buffer;
-//            int size = buffer.remaining();
-//            Log.d(TAG, "Decrypting frame: size=" + size +
-//                    " bytes, frameType=" + encodedImage.frameType +
-//                    ", timestamp=" + encodedImage.captureTimeNs);
-//
-//            // 创建新的缓冲区来存储解密数据
-//            byte[] decryptedData = new byte[size];
-//
-//            // 保存原始位置
-//            int originalPosition = buffer.position();
-//
-//            // 复制并解密数据
-//            for (int i = 0; i < size; i++) {
-//                decryptedData[i] = (byte) (buffer.get() ^ xorKey); // 简单异或解密
-//            }
-//
-//
-//            // 创建一个简单的释放回调
-//            Runnable releaseCallback = new Runnable() {
-//                @Override
-//                public void run() {
-//                    // 这里可以添加清理逻辑，如果需要
-//                    // 对于ByteBuffer.wrap创建的缓冲区，通常不需要特别的释放操作
-//                    // 但保留这个回调以满足API要求
-//                }
-//            };
-//
-//            // 重置缓冲区位置
-//            buffer.position(originalPosition);
-//            // 将加密后的字节数组转换为ByteBuffer
-//            ByteBuffer decryptedBuffer = ByteBuffer.wrap(decryptedData);
-//
-//            // 创建新的EncodedImage - 使用适当的公共API
-//            EncodedImage.Builder builder = EncodedImage.builder()
-//                    .setBuffer(decryptedBuffer, releaseCallback)
-//                    .setFrameType(encodedImage.frameType)
-//                    .setRotation(encodedImage.rotation)
-//                    .setCaptureTimeNs(encodedImage.captureTimeNs);
-//
-//            // 设置其他可用的属性
-//            if (encodedImage.qp != null) {
-//                builder.setQp(encodedImage.qp);
-//            }
-//
-//            EncodedImage decryptedImage = builder.createEncodedImage();
-//
-//            // 传递给原始解码器
-//            return originalDecoder.decode(decryptedImage, decodeInfo);
-//        }
-//
-//        @Override
-//        public String getImplementationName() {
-//            return "XorDecrypted-" + originalDecoder.getImplementationName();
-//        }
-//    }
-//
-//    /**
-//     * 加密视频编码器工厂
-//     */
-//    public class XorEncryptedVideoEncoderFactory implements VideoEncoderFactory {
-//        private final VideoEncoderFactory originalFactory;
-//        private final byte xorKey;
-//
-//        public XorEncryptedVideoEncoderFactory(VideoEncoderFactory originalFactory, byte xorKey) {
-//            this.originalFactory = originalFactory;
-//            this.xorKey = xorKey;
-//        }
-//
-//        @Override
-//        public VideoEncoder createEncoder(VideoCodecInfo codecInfo) {
-//            VideoEncoder originalEncoder = originalFactory.createEncoder(codecInfo);
-//            if (originalEncoder != null) {
-//                return new XorEncryptingVideoEncoder(originalEncoder, xorKey);
-//            }
-//            return null;
-//        }
-//
-//        @Override
-//        public VideoCodecInfo[] getSupportedCodecs() {
-//            return originalFactory.getSupportedCodecs();
-//        }
-//    }
-//
-//    /**
-//     * 解密视频解码器工厂
-//     */
-//    public class XorEncryptedVideoDecoderFactory implements VideoDecoderFactory {
-//        private final VideoDecoderFactory originalFactory;
-//        private final byte xorKey;
-//
-//        public XorEncryptedVideoDecoderFactory(VideoDecoderFactory originalFactory, byte xorKey) {
-//            this.originalFactory = originalFactory;
-//            this.xorKey = xorKey;
-//        }
-//
-//        @Override
-//        public VideoDecoder createDecoder(VideoCodecInfo codecInfo) {
-//            VideoDecoder originalDecoder = originalFactory.createDecoder(codecInfo);
-//            if (originalDecoder != null) {
-//                return new XorDecryptingVideoDecoder(originalDecoder, xorKey);
-//            }
-//            return null;
-//        }
-//
-//        @Override
-//        public VideoCodecInfo[] getSupportedCodecs() {
-//            return originalFactory.getSupportedCodecs();
-//        }
-//    }
+        // 创建 SurfaceViewRenderer
+        SurfaceViewRenderer videoView = new SurfaceViewRenderer(this);
+        FrameLayout.LayoutParams videoParams = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+        );
+        videoView.setLayoutParams(videoParams);
+        
+        // 初始化视频视图
+        videoView.init(eglBase.getEglBaseContext(), null);
+        videoView.setMirror(false);
+        videoView.setScalingType(org.webrtc.RendererCommon.ScalingType.SCALE_ASPECT_FIT);
+        videoView.setEnableHardwareScaler(true);
+        
+        container.addView(videoView);
+
+        // 创建用户名标签
+        TextView userNameLabel = new TextView(this);
+        FrameLayout.LayoutParams labelParams = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT
+        );
+        labelParams.gravity = Gravity.BOTTOM | Gravity.START;
+        labelParams.setMargins(16, 16, 16, 16);
+        userNameLabel.setLayoutParams(labelParams);
+        userNameLabel.setText(userName);
+        userNameLabel.setTextColor(Color.WHITE);
+        userNameLabel.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+        userNameLabel.setBackgroundColor(Color.parseColor("#80000000"));
+        userNameLabel.setPadding(16, 8, 16, 8);
+        
+        container.addView(userNameLabel);
+
+        remoteVideoViews.add(videoView);
+        return container;
+    }
+
+    /**
+     * 创建本地视频视图容器（用于网格模式）
+     */
+    private FrameLayout createLocalVideoContainer() {
+        FrameLayout container = new FrameLayout(this);
+        container.setBackgroundColor(Color.parseColor("#1A1A2E"));
+
+        // 创建新的本地视频视图（用于网格中显示）
+        SurfaceViewRenderer localViewForGrid = new SurfaceViewRenderer(this);
+        FrameLayout.LayoutParams videoParams = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+        );
+        localViewForGrid.setLayoutParams(videoParams);
+        
+        localViewForGrid.init(eglBase.getEglBaseContext(), null);
+        localViewForGrid.setMirror(true);
+        localViewForGrid.setScalingType(org.webrtc.RendererCommon.ScalingType.SCALE_ASPECT_FIT);
+        localViewForGrid.setEnableHardwareScaler(true);
+        
+        container.addView(localViewForGrid);
+
+        // 创建用户名标签
+        TextView userNameLabel = new TextView(this);
+        FrameLayout.LayoutParams labelParams = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT
+        );
+        labelParams.gravity = Gravity.BOTTOM | Gravity.START;
+        labelParams.setMargins(16, 16, 16, 16);
+        userNameLabel.setLayoutParams(labelParams);
+        userNameLabel.setText("我");
+        userNameLabel.setTextColor(Color.WHITE);
+        userNameLabel.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+        userNameLabel.setBackgroundColor(Color.parseColor("#80000000"));
+        userNameLabel.setPadding(16, 8, 16, 8);
+        
+        container.addView(userNameLabel);
+
+        // 将本地视频轨道绑定到这个新视图
+        if (localVideoTrack != null) {
+            localVideoTrack.addSink(localViewForGrid);
+        }
+
+        return container;
+    }
+
+    /**
+     * 更新整体视频布局
+     * 总人数 = 远程用户数 + 本地自己
+     */
+    private void updateVideoLayout() {
+        int remoteUserCount = userMediaMap.size();
+        int totalUserCount = remoteUserCount + 1; // +1 是本地用户
+        
+        // 清空远程视频容器
+        remoteVideosContainer.removeAllViews();
+        if (gridLayout != null) {
+            gridLayout.removeAllViews();
+        }
+        
+        if (totalUserCount == 2) {
+            // 2人：远程全屏 + 本地右上角小画中画
+            setupPipLayout(remoteUserCount);
+        } else if (totalUserCount == 3) {
+            // 3人：远程上下分屏 + 本地右上角小画中画
+            setupPipLayout(remoteUserCount);
+        } else {
+            // 4人+：所有人网格排列
+            setupGridLayout(totalUserCount);
+        }
+    }
+
+    /**
+     * 画中画布局（2-3人）
+     */
+    private void setupPipLayout(int remoteUserCount) {
+        // 显示本地小窗
+        localVideoPipContainer.setVisibility(View.VISIBLE);
+        
+        // 创建 GridLayout 来放置远程用户
+        gridLayout = new GridLayout(this);
+        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+        );
+        gridLayout.setLayoutParams(params);
+        gridLayout.setUseDefaultMargins(false);
+        gridLayout.setAlignmentMode(GridLayout.ALIGN_BOUNDS);
+        gridLayout.setPadding(4, 4, 4, 4);
+        
+        if (remoteUserCount == 1) {
+            // 单个远程用户 - 全屏
+            gridLayout.setColumnCount(1);
+            gridLayout.setRowCount(1);
+        } else if (remoteUserCount == 2) {
+            // 两个远程用户 - 上下分屏
+            gridLayout.setColumnCount(1);
+            gridLayout.setRowCount(2);
+        }
+        
+        // 添加远程用户视频
+        for (UserMediaInfo userInfo : userMediaMap.values()) {
+            FrameLayout container = userInfo.videoContainer;
+            if (container != null && container.getParent() != null) {
+                ((FrameLayout) container.getParent()).removeView(container);
+            }
+            
+            if (container != null) {
+                GridLayout.LayoutParams gridParams = new GridLayout.LayoutParams();
+                gridParams.width = 0;
+                gridParams.height = 0;
+                gridParams.columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1, 1f);
+                gridParams.rowSpec = GridLayout.spec(GridLayout.UNDEFINED, 1, 1f);
+                gridParams.setMargins(4, 4, 4, 4);
+                container.setLayoutParams(gridParams);
+                gridLayout.addView(container);
+            }
+        }
+        
+        remoteVideosContainer.addView(gridLayout);
+    }
+
+    /**
+     * 网格布局（4人及以上）
+     */
+    private void setupGridLayout(int totalUserCount) {
+        // 隐藏本地小窗（本地视频将加入网格）
+        localVideoPipContainer.setVisibility(View.GONE);
+        
+        // 创建 GridLayout
+        gridLayout = new GridLayout(this);
+        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+        );
+        gridLayout.setLayoutParams(params);
+        gridLayout.setUseDefaultMargins(false);
+        gridLayout.setAlignmentMode(GridLayout.ALIGN_BOUNDS);
+        gridLayout.setPadding(4, 4, 4, 4);
+        
+        // 计算行列数
+        int columns, rows;
+        if (totalUserCount <= 4) {
+            columns = 2;
+            rows = 2;
+        } else if (totalUserCount <= 6) {
+            columns = 2;
+            rows = 3;
+        } else if (totalUserCount <= 9) {
+            columns = 3;
+            rows = 3;
+        } else {
+            columns = 4;
+            rows = (totalUserCount + 3) / 4;
+        }
+        
+        gridLayout.setColumnCount(columns);
+        gridLayout.setRowCount(rows);
+        
+        // 首先添加本地视频到网格
+        FrameLayout localContainer = createLocalVideoContainer();
+        GridLayout.LayoutParams localParams = new GridLayout.LayoutParams();
+        localParams.width = 0;
+        localParams.height = 0;
+        localParams.columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1, 1f);
+        localParams.rowSpec = GridLayout.spec(GridLayout.UNDEFINED, 1, 1f);
+        localParams.setMargins(4, 4, 4, 4);
+        localContainer.setLayoutParams(localParams);
+        gridLayout.addView(localContainer);
+        
+        // 添加远程用户视频
+        for (UserMediaInfo userInfo : userMediaMap.values()) {
+            FrameLayout container = userInfo.videoContainer;
+            if (container != null && container.getParent() != null) {
+                ((FrameLayout) container.getParent()).removeView(container);
+            }
+            
+            if (container != null) {
+                GridLayout.LayoutParams gridParams = new GridLayout.LayoutParams();
+                gridParams.width = 0;
+                gridParams.height = 0;
+                gridParams.columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1, 1f);
+                gridParams.rowSpec = GridLayout.spec(GridLayout.UNDEFINED, 1, 1f);
+                gridParams.setMargins(4, 4, 4, 4);
+                container.setLayoutParams(gridParams);
+                gridLayout.addView(container);
+            }
+        }
+        
+        remoteVideosContainer.addView(gridLayout);
+    }
+
+    /**
+     * 移除视频视图容器
+     */
+    private void removeVideoViewContainer(FrameLayout container, SurfaceViewRenderer videoView) {
+        if (videoView != null) {
+            videoView.clearImage();
+            videoView.release();
+            remoteVideoViews.remove(videoView);
+        }
+        
+        if (container != null && container.getParent() != null) {
+            ((FrameLayout) container.getParent()).removeView(container);
+        }
+        
+        // 更新布局
+        updateVideoLayout();
+    }
 
     private void initWebRTC() {
         eglBase = EglBase.create();
-
-        Log.d(TAG, "WebRTC version info:");
-
-//        // 方法1：获取 PeerConnectionFactory 类的版本信息
-//        String webrtcVersion = "";
-//        try {
-//            Class<?> rtcVersionClass = Class.forName("org.webrtc.PeerConnectionFactory");
-//            java.lang.reflect.Method getVersionMethod = rtcVersionClass.getMethod("nativeGetVersion");
-//            webrtcVersion = (String) getVersionMethod.invoke(null);
-//            Log.d(TAG, "WebRTC native version: " + webrtcVersion);
-//        } catch (Exception e) {
-//            Log.e(TAG, "Failed to get WebRTC version via reflection: " + e.getMessage());
-//        }
-
-//        // 2. 初始化 PeerConnectionFactory
-//        PeerConnectionFactory.InitializationOptions initOptions =
-//                PeerConnectionFactory.InitializationOptions.builder(getApplicationContext())
-//                        .createInitializationOptions();
-//        PeerConnectionFactory.initialize(initOptions);
-//
-//        // 3. 创建默认的编解码器工厂
-//        DefaultVideoEncoderFactory defaultEncoderFactory =
-//                new DefaultVideoEncoderFactory(eglBase.getEglBaseContext(), true, true);
-//        DefaultVideoDecoderFactory defaultDecoderFactory =
-//                new DefaultVideoDecoderFactory(eglBase.getEglBaseContext());
-//
-//        // 4. 用加密包装器包装默认工厂
-//        byte xorKey = 0x55; // 简单的异或密钥
-//        VideoEncoderFactory encryptedEncoderFactory =
-//                new XorEncryptedVideoEncoderFactory(defaultEncoderFactory, xorKey);
-//        VideoDecoderFactory encryptedDecoderFactory =
-//                new XorEncryptedVideoDecoderFactory(defaultDecoderFactory, xorKey);
-//        VideoCodecInfo encryptedSupportedCodecs = encryptedEncoderFactory.getSupportedCodecs()[0];
-////        Log.e(TAG, "Encrypted factory supports " + encryptedSupportedCodecs.length + " codecs:");
-//        VideoEncoder encoder = encryptedEncoderFactory.createEncoder(encryptedSupportedCodecs);
-//        if (encoder != null) {
-//            Log.d(TAG, "Successfully created encoder: " + encoder.getImplementationName());
-//            // 尝试初始化编码器以触发回调
-//            encoder.initEncode(new VideoEncoder.Settings(1, 1280, 720,2000,  30, 1, true),
-//                    new VideoEncoder.Callback() {
-//                        @Override
-//                        public void onEncodedFrame(EncodedImage encodedImage, VideoEncoder.CodecSpecificInfo info) {
-//                            Log.d(TAG, "Manual test - onEncodedFrame called");
-//                        }
-//                    });
-//        } else {
-//            Log.e(TAG, "Failed to create encoder for codec: " + encryptedSupportedCodecs.name);
-//        }
-//        // 5. 使用加密工厂创建 PeerConnectionFactory
-//        PeerConnectionFactory.Options options = new PeerConnectionFactory.Options();
-//        peerConnectionFactory = PeerConnectionFactory.builder()
-//                .setOptions(options)
-//                .setVideoEncoderFactory(encryptedEncoderFactory)
-//                .setVideoDecoderFactory(defaultDecoderFactory)
-//                .createPeerConnectionFactory();
 
         peerConnectionFactory = PeerConnectionFactory.builder()
                 .setOptions(null)
                 .createPeerConnectionFactory();
 
-        // Initialize video views
+        // Initialize local video view (PIP mode)
         localVideoView.init(eglBase.getEglBaseContext(), null);
         localVideoView.setMirror(true);
-        remoteVideoView.init(eglBase.getEglBaseContext(), null);
-        remoteVideoView.setMirror(false);
+        localVideoView.setScalingType(org.webrtc.RendererCommon.ScalingType.SCALE_ASPECT_FIT);
+        // 设置 Z-order 让本地小窗始终在远程视频之上
+        localVideoView.setZOrderMediaOverlay(true);
 
         // Create video capturer
         if (!isOnlyAudio) {
@@ -466,22 +426,25 @@ public class VideoChatActivity extends Activity {
         // Create audio track
         createAudioTrack();
 
+        // Create video track
         if (!isOnlyAudio) {
             createVideoTrack();
         }
+
+        // 初始显示本地小窗
+        localVideoPipContainer.setVisibility(View.VISIBLE);
     }
 
     private void createVideoCapturer() {
         videoCapturer = createCameraCapturer(new Camera2Enumerator(this));
     }
 
-
     private void createVideoTrack() {
         if (videoCapturer != null) {
             surfaceTextureHelper = SurfaceTextureHelper.create("CaptureThread", eglBase.getEglBaseContext());
             VideoSource videoSource = peerConnectionFactory.createVideoSource(false);
             videoCapturer.initialize(surfaceTextureHelper, this, videoSource.getCapturerObserver());
-            videoCapturer.startCapture(1280, 720, 30);  // 修改为1280x720分辨率，30fps
+            videoCapturer.startCapture(1280, 720, 30);
 
             localVideoTrack = peerConnectionFactory.createVideoTrack("video_track", videoSource);
             localVideoTrack.addSink(localVideoView);
@@ -505,9 +468,9 @@ public class VideoChatActivity extends Activity {
         // First, try to find front facing camera
         for (String deviceName : deviceNames) {
             if (enumerator.isFrontFacing(deviceName)) {
-                VideoCapturer videoCapturer = enumerator.createCapturer(deviceName, null);
-                if (videoCapturer != null) {
-                    return videoCapturer;
+                VideoCapturer capturer = enumerator.createCapturer(deviceName, null);
+                if (capturer != null) {
+                    return capturer;
                 }
             }
         }
@@ -515,9 +478,9 @@ public class VideoChatActivity extends Activity {
         // Front facing camera not found, try something else
         for (String deviceName : deviceNames) {
             if (!enumerator.isFrontFacing(deviceName)) {
-                VideoCapturer videoCapturer = enumerator.createCapturer(deviceName, null);
-                if (videoCapturer != null) {
-                    return videoCapturer;
+                VideoCapturer capturer = enumerator.createCapturer(deviceName, null);
+                if (capturer != null) {
+                    return capturer;
                 }
             }
         }
@@ -526,9 +489,7 @@ public class VideoChatActivity extends Activity {
     }
 
     private void initMediasoup() {
-        // 设置加密模式到 RoomClient
         roomClient.setSM4Encryption(useSM4Encryption);
-        // 设置是否启用加密到 RoomClient
         roomClient.setOpenEncryption(openEncryption);
 
         roomClient.setMediasoupClientListener(new RoomClient.MediasoupClientListener() {
@@ -549,43 +510,84 @@ public class VideoChatActivity extends Activity {
             }
 
             @Override
-            public void onRemoteTrackAdded(VideoTrack remoteVideoTrack, AudioTrack audioTrack) {
+            public void onRemoteTrackAdded(String participantId, String userName, VideoTrack remoteVideoTrack, AudioTrack audioTrack) {
                 runOnUiThread(() -> {
-                    Log.d(TAG,"onRemoteTrackAdded");
-//                    if (videoTrack != null) {
-//                        Log.d("RoomClient", "更新");
-//                        remoteVideoView.setVisibility(View.VISIBLE);
-//                        videoTrack.addSink(remoteVideoView);
-//                    }
+                    Log.d(TAG, "onRemoteTrackAdded: 用户=" + userName + ", participantId=" + participantId);
+
+                    // 获取或创建用户媒体信息
+                    UserMediaInfo userInfo = userMediaMap.get(participantId);
+                    if (userInfo == null) {
+                        userInfo = new UserMediaInfo();
+                        userInfo.participantId = participantId;
+                        userInfo.userName = userName;
+                        userMediaMap.put(participantId, userInfo);
+                    }
+
+                    // 处理视频轨道
                     if (remoteVideoTrack != null) {
-                        remoteVideoTrack.setEnabled(true); // 确保轨道启用
-//                        remoteVideoTrack.addSink(new VideoSink() {
-//                            @Override
-//                            public void onFrame(VideoFrame frame) {
-//                                Log.d("RoomClient", "Remote video frame received: " + frame.getRotatedWidth() + "x" + frame.getRotatedHeight());
-//                            }
-//                        });
-                        remoteVideoTrack.addSink(remoteVideoView);
-                    } else {
-                        Log.e("RoomClient", "remoteVideoTrack is null.");
+                        remoteVideoTrack.setEnabled(true);
+                        userInfo.videoTrack = remoteVideoTrack;
+
+                        // 动态创建视频视图
+                        if (userInfo.videoContainer == null) {
+                            userInfo.videoContainer = createVideoViewContainer(participantId, userName);
+                            // 获取刚创建的 SurfaceViewRenderer
+                            userInfo.videoView = (SurfaceViewRenderer) userInfo.videoContainer.getChildAt(0);
+                            userInfo.userNameTextView = (TextView) userInfo.videoContainer.getChildAt(1);
+                        }
+
+                        if (userInfo.videoView != null) {
+                            remoteVideoTrack.addSink(userInfo.videoView);
+                            Log.d(TAG, "用户 " + userName + " 的视频已添加到视图");
+                        }
                     }
-                    if(audioTrack != null){
+
+                    // 处理音频轨道
+                    if (audioTrack != null) {
                         audioTrack.setEnabled(true);
+                        userInfo.audioTrack = audioTrack;
+                        Log.d(TAG, "用户 " + userName + " 的音频已启用");
                     }
+
+                    // 更新整体布局
+                    updateVideoLayout();
+
+                    // 启动通话计时器
                     if (!isCallConnected) {
                         isCallConnected = true;
                         startCallTimer();
                     }
                 });
-
             }
 
             @Override
             public void onParticipantLeft(String participantId) {
                 runOnUiThread(() -> {
-                    if (participantId.equals(userId)) {
-                        showToast("对方已离开");
-                        finish();
+                    Log.d(TAG, "用户离开: " + participantId);
+
+                    UserMediaInfo userInfo = userMediaMap.get(participantId);
+                    if (userInfo != null) {
+                        String userName = userInfo.userName;
+
+                        // 清理视频轨道
+                        if (userInfo.videoTrack != null && userInfo.videoView != null) {
+                            userInfo.videoTrack.removeSink(userInfo.videoView);
+                            userInfo.videoTrack = null;
+                        }
+
+                        // 清理音频轨道
+                        if (userInfo.audioTrack != null) {
+                            userInfo.audioTrack.setEnabled(false);
+                            userInfo.audioTrack = null;
+                        }
+
+                        // 移除视频视图容器
+                        removeVideoViewContainer(userInfo.videoContainer, userInfo.videoView);
+
+                        // 从映射中移除
+                        userMediaMap.remove(participantId);
+
+                        showToast("用户 " + userName + " 已离开");
                     }
                 });
             }
@@ -595,7 +597,6 @@ public class VideoChatActivity extends Activity {
     private void startCall() {
         updateStatus("正在连接...");
         roomClient.connect();
-//        mediasoupClient.connect("wss://your-mediasoup-server:3000");
     }
 
     private void startLocalMedia() {
@@ -632,6 +633,10 @@ public class VideoChatActivity extends Activity {
             roomClient.close();
             roomClient = null;
         }
+
+        if(KNSConnectManager.getInstance().isConnected()){
+            KNSConnectManager.getInstance().disconnect();
+        }
         finish();
     }
 
@@ -659,6 +664,7 @@ public class VideoChatActivity extends Activity {
 
     private void updateStatus(String status) {
         statusTextView.setText(status);
+        statusTextView.setVisibility(View.VISIBLE);
     }
 
     private void showToast(String message) {
@@ -680,10 +686,8 @@ public class VideoChatActivity extends Activity {
                 PERMISSION_REQUEST_CODE);
     }
 
-
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions,
                                            @NonNull int[] grantResults) {
-//        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == PERMISSION_REQUEST_CODE) {
             boolean allPermissionsGranted = true;
             for (int result : grantResults) {
@@ -723,9 +727,14 @@ public class VideoChatActivity extends Activity {
         if (localVideoView != null) {
             localVideoView.release();
         }
-        if (remoteVideoView != null) {
-            remoteVideoView.release();
+
+        // 清理所有远程视频视图
+        for (SurfaceViewRenderer videoView : remoteVideoViews) {
+            if (videoView != null) {
+                videoView.release();
+            }
         }
+        remoteVideoViews.clear();
 
         if (peerConnectionFactory != null) {
             peerConnectionFactory.dispose();

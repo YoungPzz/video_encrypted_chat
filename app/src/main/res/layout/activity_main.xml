@@ -20,7 +20,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:hint="请输入用户ID"
-                android:text="user_1"
+                android:text="15218211210"
                 android:inputType="text"
                 android:maxLines="1"
                 android:layout_marginBottom="15dp"
@@ -28,19 +28,7 @@
                 android:paddingVertical="8dp"
                 android:background="@drawable/edittext_bg" />
 
-            <!-- 房间号输入框 -->
-            <EditText
-                android:id="@+id/et_room_id"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:hint="请输入房间号"
-                android:text="123456"
-                android:inputType="text"
-                android:maxLines="1"
-                android:layout_marginBottom="15dp"
-                android:paddingHorizontal="10dp"
-                android:paddingVertical="8dp"
-                android:background="@drawable/edittext_bg" />
+
 
             <!-- 是否启用加密开关 -->
             <Switch
@@ -108,16 +96,28 @@
 
             </RadioGroup>
 
-            <!-- 跳转按钮 -->
+            <!-- 创建房间按钮 -->
             <Button
-                android:id="@+id/btn_jump"
+                android:id="@+id/btn_create_room"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="创建房间"
+                android:textSize="16sp"
+                android:backgroundTint="#FF9800"
+                android:textColor="@android:color/white"
+                android:paddingVertical="10dp" />
+
+            <!-- 进入房间按钮 -->
+            <Button
+                android:id="@+id/btn_join_room"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="进入房间"
                 android:textSize="16sp"
                 android:backgroundTint="#2196F3"
                 android:textColor="@android:color/white"
-                android:paddingVertical="10dp" />
+                android:paddingVertical="10dp"
+                android:layout_marginTop="12dp" />
 
             <!-- 性能检测按钮 -->
             <Button
@@ -141,9 +141,9 @@
         android:id="@+id/btn_login"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:visibility="gone"
         android:text="登录"
         android:textSize="14sp"
+        android:visibility="gone"
         android:paddingHorizontal="16dp"
         android:paddingVertical="6dp"
         android:layout_marginStart="16dp"

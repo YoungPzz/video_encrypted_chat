@@ -59,8 +59,50 @@ namespace webrtc {
 
         RTC_CHECK_EQ(frame.size() + 1, encrypted_frame.size());
 
-        // 第二道防线：关键帧模式下，如果后缀标记不对，说明没加密，降级为拷贝
-        if (perform_crypto && !use_sm4_decryption_ && encrypted_frame[frame.size()] != expected_postfix_byte_) {
+        // 解析后缀字节
+        uint8_t postfix_byte = encrypted_frame[frame.size()];
+        bool frame_encrypted = (postfix_byte & 0x80) != 0;  // 高位表示是否加密
+        int32_t frame_version = postfix_byte & 0x7F;         // 低7位存储版本号
+        
+        // 打印解密信息
+        RTC_LOG(LS_WARNING) << "[HCCryptoDecryptor] Decrypt - postfix_byte: 0x"
+                            << ", frame_encrypted: " << (frame_encrypted ? "true" : "false")
+                            << ", frame_version: " << frame_version
+                            << ", local_version: " << key_version_;
+        // 检查版本号是否匹配
+        if (frame_encrypted && frame_version != key_version_) {
+            // 版本不匹配，跳过解密，直接拷贝原始数据
+            perform_crypto = false;
+            
+            // 统计版本不匹配的帧数
+            version_mismatch_count_++;
+            
+            // 记录版本不匹配开始时间
+            if (version_mismatch_start_time_ == 0) {
+                version_mismatch_start_time_ = rtc::TimeMicros();
+            }
+            
+            int64_t mismatch_duration_ms = (rtc::TimeMicros() - version_mismatch_start_time_) / 1000;
+            
+            RTC_LOG(LS_WARNING) << "[HCCryptoDecryptor] Version mismatch! "
+                                << "Frame version: " << frame_version
+                                << ", Local version: " << key_version_
+                                << ", Mismatch count: " << version_mismatch_count_
+                                << ", Duration: " << mismatch_duration_ms << " ms";
+        } else {
+            // 版本匹配，重置统计
+            if (version_mismatch_count_ > 0) {
+                int64_t total_duration_ms = (rtc::TimeMicros() - version_mismatch_start_time_) / 1000;
+                RTC_LOG(LS_INFO) << "[HCCryptoDecryptor] Version recovered after "
+                                 << version_mismatch_count_ << " frames, "
+                                 << "duration: " << total_duration_ms << " ms";
+                version_mismatch_count_ = 0;
+                version_mismatch_start_time_ = 0;
+            }
+        }
+
+        // 根据后缀字节的加密标志决定是否解密
+        if (!frame_encrypted) {
             perform_crypto = false;
         }
 
@@ -133,6 +175,17 @@ namespace webrtc {
     void HCCryptoDecryptor::EnableSM4Decryption(bool enable) {
         use_sm4_decryption_ = enable;
         RTC_LOG(LS_INFO) << "[HCCryptoDecryptor] SM4 decryption " << (enable ? "enabled" : "disabled");
+    }
+
+    void HCCryptoDecryptor::SetSM4KeyWithVersion(const uint8_t key[16], int32_t version) {
+        memcpy(sm4_key_bytes_, key, 16);
+        sm4_set_encrypt_key(&sm4_key_, sm4_key_bytes_);
+        key_version_ = version;
+        RTC_LOG(LS_INFO) << "[HCCryptoDecryptor] SM4 key updated with version: " << version;
+    }
+
+    int32_t HCCryptoDecryptor::GetKeyVersion() const {
+        return key_version_;
     }
 
 }  // namespace webrtc

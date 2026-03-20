@@ -9,24 +9,32 @@ import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.LinearLayout;
 import android.widget.RadioGroup;
 import android.widget.Switch;
+import android.widget.TextView;
 import android.widget.Toast;
+
+import java.util.Random;
 
 public class MainActivity extends AppCompatActivity {
 
     private static final String TAG = "MainActivity";
     private EditText etUserId;
-    private EditText etRoomId;
-    private Button btnJump;
+    private Button btnCreateRoom;
+    private Button btnJoinRoom;
     private Button btnPerformance;
     private Button btnLogin;
     private Button btnContacts;
     private Button btnLogout;
     private RadioGroup encryptionModeGroup;
     private Switch switchEncryption;
-    private boolean useSM4Encryption = true; // 默认使用极致安全模式
-    private boolean openEncryption = true; // 是否启用加密
+    private boolean useSM4Encryption = true; // true ： 全量加密 ； false：选择性加密
+    private boolean openEncryption = true; // true：加密； false：不加密
+    private String currentRoomId = null; // 当前生成的房间号
+
+    private KNSConnectManager knsConnectManager;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -44,27 +52,15 @@ public class MainActivity extends AppCompatActivity {
             });
         }
 
-        // 按钮点击事件
-        if(btnJump == null) return;
-        btnJump.setOnClickListener(v -> {
-            // 获取输入框内容
-            String userId = etUserId.getText().toString().trim();
-            String roomId = etRoomId.getText().toString().trim();
+        // 创建房间按钮点击事件
+        if(btnCreateRoom != null) {
+            btnCreateRoom.setOnClickListener(v -> showCreateRoomDialog());
+        }
 
-            // 简单校验
-            if (userId.isEmpty() || roomId.isEmpty()) {
-                Toast.makeText(MainActivity.this, "用户ID和房间号不能为空", Toast.LENGTH_SHORT).show();
-                return;
-            }
-
-            // 跳转到房间创建Activity进行密钥恢复
-            Intent intent = new Intent(MainActivity.this, RoomCreationActivity.class);
-            intent.putExtra("USER_ID", userId);
-            intent.putExtra("ROOM_ID", roomId);
-            intent.putExtra("USE_SM4_ENCRYPTION", useSM4Encryption); // 传递加密模式
-            intent.putExtra("OPEN_ENCRYPTION", openEncryption); // 传递是否启用加密
-            startActivity(intent);
-        });
+        // 进入房间按钮点击事件
+        if(btnJoinRoom != null) {
+            btnJoinRoom.setOnClickListener(v -> showJoinRoomDialog());
+        }
 
         // 性能检测按钮点击事件
         if(btnPerformance == null) return;
@@ -90,8 +86,8 @@ public class MainActivity extends AppCompatActivity {
     private void initView() {
         // 绑定控件
         etUserId = findViewById(R.id.et_user_id);
-        etRoomId = findViewById(R.id.et_room_id);
-        btnJump = findViewById(R.id.btn_jump);
+        btnCreateRoom = findViewById(R.id.btn_create_room);
+        btnJoinRoom = findViewById(R.id.btn_join_room);
         btnPerformance = findViewById(R.id.btn_performance);
         btnLogin = findViewById(R.id.btn_login);
         btnContacts = findViewById(R.id.btn_contacts);
@@ -108,6 +104,152 @@ public class MainActivity extends AppCompatActivity {
         switchEncryption.setOnCheckedChangeListener((buttonView, isChecked) -> {
             openEncryption = isChecked;
         });
+    }
+
+    /**
+     * 显示创建房间对话框
+     */
+    private void showCreateRoomDialog() {
+        String userId = etUserId.getText().toString().trim();
+        if (userId.isEmpty()) {
+            Toast.makeText(MainActivity.this, "请输入用户ID", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        // 生成6位数字房间号
+        currentRoomId = generateRoomId();
+
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("创建房间");
+
+        // 自定义布局显示房间号
+        LinearLayout layout = new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(50, 40, 50, 20);
+
+        TextView tvMessage = new TextView(this);
+        tvMessage.setText("您即将创建一个新房间");
+        tvMessage.setTextSize(16);
+        tvMessage.setPadding(0, 0, 0, 20);
+        layout.addView(tvMessage);
+
+        TextView tvRoomId = new TextView(this);
+        tvRoomId.setText("房间号: " + currentRoomId);
+        tvRoomId.setTextSize(24);
+        tvRoomId.setTextColor(getResources().getColor(android.R.color.holo_orange_dark, null));
+        tvRoomId.setGravity(android.view.Gravity.CENTER);
+        tvRoomId.setPadding(0, 10, 0, 20);
+        layout.addView(tvRoomId);
+
+        TextView tvHint = new TextView(this);
+        tvHint.setText("请将房间号分享给其他参与者");
+        tvHint.setTextSize(14);
+        tvHint.setTextColor(getResources().getColor(android.R.color.darker_gray, null));
+        layout.addView(tvHint);
+
+        builder.setView(layout);
+        builder.setPositiveButton("确认创建", (dialog, which) -> {
+            if(openEncryption) {
+                //建立与kns的websocket连接
+                knsConnectManager = KNSConnectManager.getInstance();
+                knsConnectManager.setContext(this);
+                knsConnectManager.establishWebSocketConnection(currentRoomId, userId);
+            } else {
+                enterVideoChat();
+            }
+
+            // 跳转到房间创建Activity
+//            Intent intent = new Intent(MainActivity.this, RoomCreationActivity.class);
+//            intent.putExtra("USER_ID", userId);
+//            intent.putExtra("ROOM_ID", currentRoomId);
+//            intent.putExtra("USE_SM4_ENCRYPTION", useSM4Encryption);
+//            intent.putExtra("OPEN_ENCRYPTION", openEncryption);
+//            intent.putExtra("IS_ROOM_CREATOR", true);
+//            startActivity(intent);
+        });
+        builder.setNegativeButton("取消", null);
+        builder.setCancelable(false);
+        builder.show();
+    }
+
+    /**
+     * 进入视频聊天界面
+     */
+    public void enterVideoChat() {
+        String userId = etUserId.getText().toString().trim();
+
+        // 简单校验
+        if (userId.isEmpty() || currentRoomId.isEmpty()) {
+            Toast.makeText(this, "用户ID和房间号不能为空", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        // 跳转到VideoChatActivity，传递相同的数据
+        Intent intent = new Intent(MainActivity.this, VideoChatActivity.class);
+        intent.putExtra("USE_SM4_ENCRYPTION", useSM4Encryption);
+        intent.putExtra("OPEN_ENCRYPTION", openEncryption);
+        intent.putExtra("USER_ID", userId);
+        intent.putExtra("ROOM_ID", currentRoomId);
+        startActivity(intent);
+    }
+
+
+    /**
+     * 显示进入房间对话框
+     */
+    private void showJoinRoomDialog() {
+        String userId = etUserId.getText().toString().trim();
+        if (userId.isEmpty()) {
+            Toast.makeText(MainActivity.this, "请输入用户ID", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("进入房间");
+
+        // 创建输入框
+        final EditText input = new EditText(this);
+        input.setHint("请输入6位房间号");
+        input.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        input.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(6)});
+        input.setPadding(50, 30, 50, 30);
+        builder.setView(input);
+
+        builder.setPositiveButton("进入房间", (dialog, which) -> {
+
+            String roomId = input.getText().toString().trim();
+            if (roomId.isEmpty()) {
+                Toast.makeText(MainActivity.this, "请输入房间号", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            if (roomId.length() != 6) {
+                Toast.makeText(MainActivity.this, "房间号必须是6位数字", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            currentRoomId = roomId;
+            if(openEncryption) {
+                //建立与kns的websocket连接
+                knsConnectManager = KNSConnectManager.getInstance();
+                knsConnectManager.setContext(this);
+                knsConnectManager.establishWebSocketConnection(currentRoomId, userId);
+            } else {
+                enterVideoChat();
+            }
+
+
+        });
+        builder.setNegativeButton("取消", null);
+        builder.setCancelable(false);
+        builder.show();
+    }
+
+    /**
+     * 生成6位数字房间号
+     */
+    private String generateRoomId() {
+        Random random = new Random();
+        int roomId = 100000 + random.nextInt(900000); // 生成100000-999999之间的随机数
+        return String.valueOf(roomId);
     }
 
     /**

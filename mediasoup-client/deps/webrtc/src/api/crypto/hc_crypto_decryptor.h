@@ -56,6 +56,9 @@ namespace webrtc {
         void SetSM4Key(const uint8_t key[16]);
         void SetSM4CTR(const uint8_t ctr[16]);
         void EnableSM4Decryption(bool enable);
+        // 设置密钥和版本号（从 Android 原生传入）
+        void SetSM4KeyWithVersion(const uint8_t key[16], int32_t version);
+        int32_t GetKeyVersion() const;
 
     private:
         uint8_t fake_key_ = 0;
@@ -67,12 +70,17 @@ namespace webrtc {
         uint8_t sm4_key_bytes_[16];    // 16字节 SM4 密钥
         uint8_t sm4_ctr_[16];          // 16字节 CTR 计数器
         bool use_sm4_decryption_;      // 是否使用 SM4 解密
+        int32_t key_version_ = 0;      // 密钥版本号（从 Android 传入）
 
         // 预定义的固定 SM4 密钥和 CTR（用于初始化）
         static const uint8_t DEFAULT_SM4_KEY[16];
         static const uint8_t DEFAULT_SM4_CTR[16];
         size_t v_frame_count_ = 0;
         int64_t v_total_us_ = 0;
+
+        // 版本不匹配统计
+        size_t version_mismatch_count_ = 0;
+        int64_t version_mismatch_start_time_ = 0;
     };
 
 }  // namespace webrtc

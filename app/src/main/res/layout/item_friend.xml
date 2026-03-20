@@ -43,9 +43,7 @@
         android:gravity="center"
         android:padding="8dp"
         android:layout_marginStart="12dp"
-        android:background="?android:attr/selectableItemBackground"
-        android:clickable="true"
-        android:focusable="true">
+        android:background="?android:attr/selectableItemBackground">
 
         <!-- 安全状态圆点 -->
         <View

@@ -102,11 +102,56 @@ public class ContactsActivity extends AppCompatActivity {
                 return;
             }
 
-            // 模拟发送申请成功
-            Toast.makeText(ContactsActivity.this, "好友申请已发送", Toast.LENGTH_SHORT).show();
+            // 模拟查询用户安全状态（实际项目中应从服务器获取）
+            Friend.SecurityStatus userStatus = checkUserSecurityStatus(userId);
+
+            // 如果是高风险用户，弹出确认对话框
+            if (userStatus == Friend.SecurityStatus.DANGER) {
+                showHighRiskConfirmDialog(userId, message);
+            } else {
+                // 直接发送申请
+                sendFriendRequest(userId, message);
+            }
         });
         builder.setNegativeButton("取消", null);
         builder.show();
+    }
+
+    /**
+     * 显示高风险用户确认对话框
+     */
+    private void showHighRiskConfirmDialog(String userId, String message) {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("安全警告");
+        builder.setMessage("该用户的状态为高风险，确认添加吗？");
+        builder.setPositiveButton("确认添加", (dialog, which) -> {
+            sendFriendRequest(userId, message);
+        });
+        builder.setNegativeButton("取消", null);
+        builder.show();
+    }
+
+    /**
+     * 发送好友申请
+     */
+    private void sendFriendRequest(String userId, String message) {
+        // 模拟发送申请成功
+        Toast.makeText(ContactsActivity.this, "好友申请已发送", Toast.LENGTH_SHORT).show();
+    }
+
+    /**
+     * 查询用户安全状态（模拟）
+     */
+    private Friend.SecurityStatus checkUserSecurityStatus(String userId) {
+        // 模拟：根据用户ID判断风险等级
+        // 实际项目中应从服务器查询
+        if (userId.contains("999")) {
+            return Friend.SecurityStatus.DANGER;
+        } else if (userId.contains("666")) {
+            return Friend.SecurityStatus.WARNING;
+        } else {
+            return Friend.SecurityStatus.SAFE;
+        }
     }
 
     private void showFriendDetailDialog(Friend friend) {

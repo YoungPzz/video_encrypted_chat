@@ -22,18 +22,12 @@ import org.webrtc.VideoTrack;
 import org.mediasoup.droid.MediasoupException;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
-import java.util.Random;
 
 import io.socket.client.Ack;
 import io.socket.client.IO;
 import io.socket.client.Socket;
-
-import android.os.Handler;
-import android.os.Looper;
 
 public class RoomClient {
     private static final String TAG = "RoomClient";
@@ -55,21 +49,6 @@ public class RoomClient {
     private boolean toUserIsReady = false;
     private static String ServerURL = "http://52.80.120.124:3000/mediasoup";
     
-    // 用于聚合同一用户的 video 和 audio 轨道
-    // key: participantId, value: 用户轨道信息
-    private Map<String, UserTracks> pendingUserTracks = new HashMap<>();
-    private Handler mainHandler = new Handler(Looper.getMainLooper());
-    
-    // 用户轨道聚合类
-    private static class UserTracks {
-        VideoTrack videoTrack;
-        AudioTrack audioTrack;
-        String userName;
-        long firstTrackTime;  // 第一个轨道到达的时间
-        boolean videoReady = false;
-        boolean audioReady = false;
-    }
-    
     // 加密配置参数
     private boolean useSM4Encryption = false; // 默认启用 SM4 加密
 
@@ -77,59 +56,30 @@ public class RoomClient {
 
     private byte[] sm4Key = new byte[]{
         0x01, 0x23, 0x45, 0x67, (byte)0x89, (byte)0xAB, (byte)0xCD, (byte)0xEF,
-        (byte)0xFE, (byte)0xDC, (byte)0xBA, (byte)0x98, 0x76, 0x54, 0x32, 0x10
+        (byte)0xFE, (byte)0xDC, (byte)0xBA, 0x76, 0x54, 0x32, 0x10
     };
     private byte[] sm4CTR = new byte[]{
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01
     };
 
-    private boolean isKeyRecovered = false;
-
-    // 当前活跃的加密器和解密器（用于动态更新密钥）
-    private HCCrypto activeEncryptor = null;
-    private HCCryptoDecryptor activeDecryptor = null;
-    private int currentKeyVersion = 0; // 当前密钥版本号
-
     public interface MediasoupClientListener {
         void onConnected();
         void onConnectionFailed(String error);
-        // 添加 participantId 参数，用于区分不同用户
-        void onRemoteTrackAdded(String participantId, String userName, VideoTrack videoTrack, AudioTrack audioTrack);
+        void onRemoteTrackAdded(VideoTrack videoTrack, AudioTrack audioTrack);
         void onParticipantLeft(String participantId);
 
     }
 
     public RoomClient(Context context, String userId, String roomId) {
         this.context = context;
-        MediasoupClient.initialize(context); //加载 native 库，准备 WebRTC 传输环境
+        MediasoupClient.initialize(context);
         this.roomId = roomId;
         this.userId = userId;
-        
-        // 自动设置密钥恢复监听器
-        setupKeyRecoveryListener();
     }
 
     public void setMediasoupClientListener(MediasoupClientListener listener) {
         this.listener = listener;
-    }
-
-    public void printSm4KeyWithLog() {
-        StringBuilder hexStr = new StringBuilder();
-        // 手动遍历方式，无版本依赖，兼容所有Android
-        for (byte b : sm4Key) {
-            // 转两位十六进制，大写，不足补0
-            hexStr.append(String.format("%02X", b));
-        }
-        // 用Log.d输出
-        Log.d(TAG, "SM4密钥(十六进制): " + hexStr.toString());
-
-        // 可选：带空格的易读格式（调试更友好）
-        StringBuilder hexStrWithSpace = new StringBuilder();
-        for (byte b : sm4Key) {
-            hexStrWithSpace.append(String.format("%02X ", b));
-        }
-        Log.d(TAG, "SM4密钥(易读格式): " + hexStrWithSpace.toString().trim());
     }
 
     public void connect() {
@@ -244,8 +194,6 @@ public class RoomClient {
         JSONObject data = new JSONObject();
         try {
             data.put("roomName", roomId);
-            data.put("userId", userId);
-            Log.d(TAG, "joinRoom: " + data.toString());
         } catch (JSONException e) {
             e.printStackTrace();
         }
@@ -256,21 +204,9 @@ public class RoomClient {
                 try {
                     // 这里直接获取rtpCapabilities字段
                     JSONObject rtpCapabilitiesJson = response.getJSONObject("rtpCapabilities");
-                    rtpCapabilities = rtpCapabilitiesJson.toString();
+                    String rtpCapabilities = rtpCapabilitiesJson.toString();
 
-                    Log.i(TAG, "rtpCapabilities: " + rtpCapabilities);
-                    if(!openEncryption) {
-                        mainHandler.post(() -> {
-                            Log.i(TAG, "[KeyRecovery] 在主线程创建 Device");
-                            createDevice(rtpCapabilities);
-                        });
-                    } else if(activeEncryptor == null && isKeyRecovered){
-                        mainHandler.post(() -> {
-                            Log.i(TAG, "[KeyRecovery] 在主线程创建 Device");
-                            createDevice(rtpCapabilities);
-                        });
-                    }
-//                    createDevice(rtpCapabilities);  为了处理时序问题 移到分片处理完成之后才做这一步
+                    createDevice(rtpCapabilities);
                 } catch (JSONException e) {
                     e.printStackTrace();
                 }
@@ -280,7 +216,6 @@ public class RoomClient {
 
     private void createDevice(String rtpCapabilities) {
         try {
-            Log.i(TAG, "creating device: ");
             mediasoupDevice = new Device();
             mediasoupDevice.load(rtpCapabilities, null);
             createSendTransport();
@@ -294,8 +229,8 @@ public class RoomClient {
         JSONObject userInfo = new JSONObject();
         try {
             // 在这里添加用户信息，例如：
-            userInfo.put("name", userId);
-            userInfo.put("id", userId + new Random().toString());
+            userInfo.put("name", "syw");
+            userInfo.put("id", "111");
             // 其他用户信息...
         } catch (JSONException e) {
             Log.e(TAG, "创建用户信息JSON失败", e);
@@ -586,10 +521,7 @@ public class RoomClient {
         });
     }
 
-    //消费远程用户的媒体轨道
-    /*
 
-     */
     private void connectRecvTransport(RecvTransport consumerTransport, String remoteProducerId, String serverConsumerTransportId) {
         try {
             JSONObject params = new JSONObject();
@@ -623,12 +555,6 @@ public class RoomClient {
                             final JSONObject rtpParameters = responseParams.getJSONObject("rtpParameters");
                             final JSONObject appData = responseParams.getJSONObject("userInfo");
                             final String serverConsumerId = responseParams.getString("serverConsumerId");
-                            
-                            // 从 userInfo 中提取 participantId 和 userName
-                            String participantId = appData.optString("id", "unknown");
-                            String userName = appData.optString("name", "未知用户");
-                            
-                            Log.d(TAG, "收到 " + kind + " 轨道，用户: " + userName + " (ID: " + participantId + ")");
 
 
 
@@ -655,34 +581,22 @@ public class RoomClient {
                                 Log.d(TAG, "Consumer ID: " + consumer.getId());
                                 Log.d(TAG, "Producer ID: " + producerId);
                                 try {
-                                    if(openEncryption && kind.equals("video")) {
-                                        Log.d(TAG, "开启解密器");
-                                        activeDecryptor = new HCCryptoDecryptor();
-                                        activeDecryptor.enableSM4Decryption(useSM4Encryption);
-                                        activeDecryptor.setSM4KeyWithVersion(sm4Key, currentKeyVersion);
-                                        Log.d(TAG, "设置进解密器的SM4 Key为：");
-                                        printSm4KeyWithLog();
-                                        Log.d(TAG, kind + "解密器已设置（SM4-CTR），版本: " + currentKeyVersion);
-                                        consumer.setFrameDecryptor(activeDecryptor);
+                                    HCCryptoDecryptor decryptor = new HCCryptoDecryptor();
+                                    // 配置解密器
+                                    decryptor.enableSM4Decryption(useSM4Encryption);
+                                    if (useSM4Encryption) {
+//                                        decryptor.setSM4Key(sm4Key);
+//                                        decryptor.setSM4CTR(sm4CTR);
+                                        Log.d(TAG, kind + "解密器已设置（SM4-CTR）");
                                     } else {
-                                        Log.d(TAG, "不设置解密器");
+                                        Log.d(TAG, kind + "解密器已设置（XOR）");
                                     }
-//                                    activeDecryptor = new HCCryptoDecryptor();
-//                                    // 配置解密器
-//                                    activeDecryptor.enableSM4Decryption(useSM4Encryption);
-//                                    if (useSM4Encryption) {
-//                                        activeDecryptor.setSM4KeyWithVersion(sm4Key, currentKeyVersion);
-////                                        activeDecryptor.setSM4CTR(sm4CTR);
-//                                        Log.d(TAG, kind + "解密器已设置（SM4-CTR），版本: " + currentKeyVersion);
-//                                    } else {
-//                                        Log.d(TAG, kind + "解密器已设置（XOR）");
-//                                    }
-//
-//                                    Log.d(TAG, "HCCryptoDecryptor Java 对象创建成功");
-//                                    Log.d(TAG, "Native decryptor 指针: " + activeDecryptor.getNativeHCCryptoDecryptor());
-//                                    if (openEncryption) consumer.setFrameDecryptor(activeDecryptor);
-//                                    Log.d(TAG, kind + "解密器已设置成功");
-//                                    Log.d(TAG, "=== 解密器设置完成 ===");
+                                    
+                                    Log.d(TAG, "HCCryptoDecryptor Java 对象创建成功");
+                                    Log.d(TAG, "Native decryptor 指针: " + decryptor.getNativeHCCryptoDecryptor());
+                                    if (openEncryption) consumer.setFrameDecryptor(decryptor);
+                                    Log.d(TAG, kind + "解密器已设置成功");
+                                    Log.d(TAG, "=== 解密器设置完成 ===");
                                 } catch (Exception e) {
                                     Log.e(TAG, "设置解密器失败: " + e.getMessage(), e);
                                     e.printStackTrace();
@@ -702,15 +616,13 @@ public class RoomClient {
                             consumerInfo.producerId = remoteProducerId;
                             consumerInfo.consumer = consumer;
                             consumerInfo.kind = kind;
-                            consumerInfo.participantId = participantId;
-                            consumerInfo.userName = userName;
                             consumerTransports.add(consumerInfo);
 
                             // 处理媒体流和参与者
 //                            handleMediaStreamAndParticipant(consumer, userInfo);
 
-                            // 通知服务器恢复消费者的媒体流，并传递 participantId 和 userName
-                            resumeConsumer(serverConsumerId, participantId, userName, kind, consumer);
+                            // 通知服务器恢复消费者的媒体流
+                            resumeConsumer(serverConsumerId);
                         } catch (JSONException | MediasoupException e) {
                             Log.e(TAG, "解析consume响应失败", e);
                         }
@@ -725,8 +637,8 @@ public class RoomClient {
     }
 
 
-    // 恢复消费者媒体流（聚合轨道版本）
-    private void resumeConsumer(String serverConsumerId, String participantId, String userName, String kind, Consumer consumer) {
+    // 恢复消费者媒体流
+    private void resumeConsumer(String serverConsumerId) {
         try {
             JSONObject params = new JSONObject();
             params.put("serverConsumerId", serverConsumerId);
@@ -734,118 +646,38 @@ public class RoomClient {
             socket.emit("consumer-resume", params, new Ack() {
                 @Override
                 public void call(Object... args) {
-                    // 恢复成功
+
                 }
             });
             Log.d(TAG, "消费者恢复成功: " + serverConsumerId);
-            
-            // 获取轨道
-            MediaStreamTrack track = consumer.getTrack();
-            if (track == null) {
-                Log.e(TAG, "Consumer track 为 null");
-                return;
+            MediaStreamTrack videoTrack = null;
+            MediaStreamTrack audioTrack = null;
+            if (listener != null) {
+                for(ConsumerInfo consumerInfo: consumerTransports){
+                    Log.d(TAG, "consumerInfo");
+                    Log.d(TAG, consumerInfo.serverConsumerTransportId);
+                    Log.d(TAG, consumerInfo.kind);
+                    Log.d(TAG, consumerInfo.producerId);
+                    Log.d(TAG, String.valueOf(consumerInfo.consumer.getTrack() == null));
+                    if(consumerInfo.kind.equals("video")){
+                        videoTrack =  consumerInfo.consumer.getTrack();
+                        if(videoTrack != null){
+                            Log.d(TAG, "Video track found: " + videoTrack.id());
+                            Log.d(TAG, "Track state: " + videoTrack.state());
+                            Log.d(TAG, "Track enabled: " + videoTrack.enabled());
+                            Log.d(TAG, "videoTrack不为空: " + serverConsumerId);
+                        }
+                    }else {
+                        audioTrack = consumerInfo.consumer.getTrack();
+                        if(audioTrack != null){
+                            Log.d(TAG, "audioTrack不为空: " + serverConsumerId);
+                        }
+                    }
+                }
+                listener.onRemoteTrackAdded((VideoTrack)videoTrack, (AudioTrack)audioTrack);
             }
-            
-            // 聚合轨道逻辑
-            aggregateTracks(participantId, userName, kind, track);
-            
         } catch (JSONException e) {
             Log.e(TAG, "创建consumer-resume请求失败", e);
-        }
-    }
-    
-    /**
-     * 聚合同一用户的 video 和 audio 轨道
-     * 当两个轨道都到达后，触发 onRemoteTrackAdded 回调
-     */
-    private void aggregateTracks(String participantId, String userName, String kind, MediaStreamTrack track) {
-        // 获取或创建用户轨道信息
-        UserTracks userTracks = pendingUserTracks.get(participantId);
-        
-        if (userTracks == null) {
-            userTracks = new UserTracks();
-            userTracks.userName = userName;
-            userTracks.firstTrackTime = System.currentTimeMillis();
-            pendingUserTracks.put(participantId, userTracks);
-        }
-        
-        // 根据类型保存轨道
-        if ("video".equals(kind) && track instanceof VideoTrack) {
-            userTracks.videoTrack = (VideoTrack) track;
-            userTracks.videoReady = true;
-            Log.d(TAG, "用户 " + userName + " 的视频轨道已就绪");
-        } else if ("audio".equals(kind) && track instanceof AudioTrack) {
-            userTracks.audioTrack = (AudioTrack) track;
-            userTracks.audioReady = true;
-            Log.d(TAG, "用户 " + userName + " 的音频轨道已就绪");
-        }
-        
-        // 检查是否两个轨道都就绪
-        checkAndNotifyTracksReady(participantId, userTracks);
-    }
-    
-    /**
-     * 检查用户轨道是否就绪，如果是则触发回调
-     */
-    private void checkAndNotifyTracksReady(String participantId, UserTracks userTracks) {
-        // 情况1：video 和 audio 都就绪
-        if (userTracks.videoReady && userTracks.audioReady) {
-            notifyTracksReady(participantId, userTracks);
-            return;
-        }
-        
-        // 情况2：只有 video 就绪，等待 audio（设置超时）
-        if (userTracks.videoReady && !userTracks.audioReady) {
-            scheduleTimeoutCheck(participantId, "audio");
-            return;
-        }
-        
-        // 情况3：只有 audio 就绪，等待 video（设置超时）
-        if (userTracks.audioReady && !userTracks.videoReady) {
-            scheduleTimeoutCheck(participantId, "video");
-            return;
-        }
-    }
-    
-    /**
-     * 设置超时检查，如果等待的轨道在超时时间内未到达，则单独回调已有的轨道
-     */
-    private void scheduleTimeoutCheck(String participantId, String waitingKind) {
-        mainHandler.postDelayed(() -> {
-            UserTracks userTracks = pendingUserTracks.get(participantId);
-            if (userTracks == null) return;
-            
-            // 检查等待的轨道是否已到达
-            if (("audio".equals(waitingKind) && !userTracks.audioReady) ||
-                ("video".equals(waitingKind) && !userTracks.videoReady)) {
-                
-                Log.d(TAG, "用户 " + userTracks.userName + " 的 " + waitingKind + " 轨道超时未到达，单独回调");
-                notifyTracksReady(participantId, userTracks);
-            }
-        }, 3000); // 3秒超时
-    }
-    
-    /**
-     * 通知轨道已就绪（触发回调）
-     */
-    private void notifyTracksReady(String participantId, UserTracks userTracks) {
-        if (listener != null) {
-            // 从待处理列表中移除（避免重复回调）
-            pendingUserTracks.remove(participantId);
-            
-            // 在主线程触发回调
-            mainHandler.post(() -> {
-                Log.d(TAG, "触发 onRemoteTrackAdded: 用户=" + userTracks.userName + 
-                      ", video=" + (userTracks.videoTrack != null) + 
-                      ", audio=" + (userTracks.audioTrack != null));
-                
-                listener.onRemoteTrackAdded(
-                    participantId, 
-                    userTracks.userName, 
-                    userTracks.videoTrack, 
-                    userTracks.audioTrack
-                );
-            });
         }
     }
 
@@ -862,19 +694,17 @@ public class RoomClient {
                 );
                 // 添加加密器设置
                 if (videoProducer != null) {
-                    activeEncryptor = new HCCrypto();
+                    HCCrypto encryptor = new HCCrypto();
                     // 配置加密器
-                    if (openEncryption) {
-                        activeEncryptor.enableSM4Encryption(useSM4Encryption);
-                        activeEncryptor.setSM4KeyWithVersion(sm4Key, currentKeyVersion);
-//                        activeEncryptor.setSM4CTR(sm4CTR);
-                        videoProducer.setFrameEncryptor(activeEncryptor);
-                        Log.d(TAG, "设置进加密器的SM4 Key为：");
-                        printSm4KeyWithLog();
-                        Log.d(TAG, "视频加密器已设置（SM4-CTR），版本: " + currentKeyVersion);
+                    encryptor.enableSM4Encryption(useSM4Encryption);
+                    if (useSM4Encryption) {
+//                        encryptor.setSM4Key(sm4Key);
+//                        encryptor.setSM4CTR(sm4CTR);
+                        Log.d(TAG, "视频加密器已设置（SM4-CTR）");
                     } else {
-                        Log.d(TAG, "不设置视频加密器）");
+                        Log.d(TAG, "视频加密器已设置（XOR）");
                     }
+                    if (openEncryption) videoProducer.setFrameEncryptor(encryptor);
                 }
                 Log.d(TAG, "produce video track success: ");
             } catch (MediasoupException e) {
@@ -896,16 +726,15 @@ public class RoomClient {
                 if (audioProducer != null) {
                     HCCrypto encryptor = new HCCrypto();
                     // 配置加密器
-//                    encryptor.enableSM4Encryption(useSM4Encryption);
-                    if (openEncryption) {
-//                        audioProducer.setFrameEncryptor(encryptor);
-//                        encryptor.setSM4CTR(sm4CTR);
+                    encryptor.enableSM4Encryption(useSM4Encryption);
+                    if (useSM4Encryption) {
+                        encryptor.setSM4Key(sm4Key);
+                        encryptor.setSM4CTR(sm4CTR);
                         Log.d(TAG, "音频加密器已设置（SM4-CTR）");
                     } else {
                         Log.d(TAG, "音频加密器已设置（XOR）");
                     }
-//                    if (openEncryption) audioProducer.setFrameEncryptor(activeEncryptor);
-//                    audioProducer.setFrameEncryptor(encryptor);
+                    audioProducer.setFrameEncryptor(encryptor);
                 }
             } catch (MediasoupException e) {
                 Log.e(TAG, "Error adding audio track: " + e.getMessage());
@@ -928,37 +757,6 @@ public class RoomClient {
         }
         if (mediasoupDevice != null) {
             mediasoupDevice.dispose();
-        }
-        // 清理待处理的用户轨道
-        pendingUserTracks.clear();
-    }
-    
-    /**
-     * 根据用户ID清理相关的 Consumer
-     * 当用户离开房间时调用
-     */
-    public void closeConsumerByParticipantId(String participantId) {
-        Log.d(TAG, "清理用户 " + participantId + " 的消费者");
-        
-        // 从待处理列表中移除
-        pendingUserTracks.remove(participantId);
-        
-        // 从消费者列表中移除并关闭相关 Consumer
-        Iterator<ConsumerInfo> iterator = consumerTransports.iterator();
-        while (iterator.hasNext()) {
-            ConsumerInfo info = iterator.next();
-            if (participantId.equals(info.participantId)) {
-                if (info.consumer != null) {
-                    info.consumer.close();
-                }
-                iterator.remove();
-                Log.d(TAG, "已关闭用户 " + participantId + " 的 " + info.kind + " 消费者");
-            }
-        }
-        
-        // 通知监听器
-        if (listener != null) {
-            listener.onParticipantLeft(participantId);
         }
     }
 
@@ -1014,47 +812,4 @@ public class RoomClient {
     public boolean isSM4EncryptionEnabled() {
         return useSM4Encryption;
     }
-
-    /**
-     * 获取当前密钥版本号
-     */
-    public int getCurrentKeyVersion() {
-        return currentKeyVersion;
-    }
-
-    /**
-     * 设置密钥恢复监听器
-     * 在 KNSConnectManager 密钥恢复成功后，会回调更新加密器/解密器的密钥
-     */
-    public void setupKeyRecoveryListener() {
-        KNSConnectManager.getInstance().setKeyRecoveryListener(new KNSConnectManager.KeyRecoveryListener() {
-            @Override
-            public void onKeyRecovered(byte[] recoveredKey, int version) {
-                Log.i(TAG, "[KeyRecovery] 收到密钥恢复通知，版本: " + version);
-                
-                // 更新本地存储的密钥
-                sm4Key = recoveredKey;
-                currentKeyVersion = version;
-                isKeyRecovered = true;
-                // 更新活跃的加密器密钥
-                if (activeEncryptor != null) {
-                    activeEncryptor.setSM4KeyWithVersion(recoveredKey, version);
-                    Log.i(TAG, "[KeyRecovery] 加密器密钥已更新，版本: " + version);
-                } else if (rtpCapabilities != null) {
-                    // 必须切换到主线程调用 JNI 方法
-                    mainHandler.post(() -> {
-                        Log.i(TAG, "[KeyRecovery] 在主线程创建 Device");
-                        createDevice(rtpCapabilities);
-                    });
-                }
-                
-                // 更新活跃的解密器密钥
-                if (activeDecryptor != null) {
-                    activeDecryptor.setSM4KeyWithVersion(recoveredKey, version);
-                    Log.i(TAG, "[KeyRecovery] 解密器密钥已更新，版本: " + version);
-                }
-            }
-        });
-    }
-
 }

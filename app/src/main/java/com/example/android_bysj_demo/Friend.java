@@ -9,7 +9,7 @@ public class Friend {
     public enum SecurityStatus {
         SAFE("安全", 0xFF4CAF50),
         WARNING("警告", 0xFFFF9800),
-        DANGER("未认证", 0xFFF44336);
+        DANGER("高风险", 0xFFF44336);
 
         private final String displayName;
         private final int color;

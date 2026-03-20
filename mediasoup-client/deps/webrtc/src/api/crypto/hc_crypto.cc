@@ -59,11 +59,17 @@ namespace webrtc {
             uint8_t local_ctr[16];
             memcpy(local_ctr, sm4_ctr_, 16);
             sm4_ctr_encrypt(&sm4_key_, local_ctr, frame.data(), frame.size(), encrypted_frame.data());
-            encrypted_frame[frame.size()] = postfix_byte_; // 写入加密后缀标记
+            // 后缀字节编码: 高位(0x80)表示加密, 低7位存储版本号(0-127)
+            uint8_t postfix_byte = 0x80 | (key_version_ & 0x7F);
+            encrypted_frame[frame.size()] = postfix_byte;
+            
+            // 打印加密信息
+            RTC_LOG(LS_WARNING) << "[HCCrypto] Encrypt - key_version: " << key_version_
+                                << ", frame size: " << frame.size();
         } else {
             // 不满足加密条件（即：Mode为关键帧模式且当前是P帧），执行透传
             memcpy(encrypted_frame.data(), frame.data(), frame.size());
-            encrypted_frame[frame.size()] = 0x00; // 写入非加密后缀标记
+            encrypted_frame[frame.size()] = 0x00; // 未加密帧，版本号为0
         }
 
         *bytes_written = frame.size() + 1;
@@ -134,5 +140,16 @@ namespace webrtc {
     void HCCrypto::EnableSM4Encryption(bool enable) {
         use_sm4_encryption_ = enable;
         RTC_LOG(LS_INFO) << "[HCCrypto] SM4 encryption " << (enable ? "enabled" : "disabled");
+    }
+
+    void HCCrypto::SetSM4KeyWithVersion(const uint8_t key[16], int32_t version) {
+        memcpy(sm4_key_bytes_, key, 16);
+        sm4_set_encrypt_key(&sm4_key_, sm4_key_bytes_);
+        key_version_ = version;
+        RTC_LOG(LS_INFO) << "[HCCrypto] SM4 key updated with version: " << version;
+    }
+
+    int32_t HCCrypto::GetKeyVersion() const {
+        return key_version_;
     }
 }  // namespace webrtc
